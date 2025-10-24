@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>CRDT Pixel Canvas</title>
+    <style>
+        :root {
+            --panel: #f7f7fb;
+            --ink: #222;
+            --accent: #7c5cff;
+            --border: #ddd;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 24px;
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+            color: var(--ink); background: #fafbff;
+        }
+        .app {
+            max-width: 1080px; margin: 0 auto;
+        }
+        .toolbar {
+            display: flex; gap: 12px; align-items: center;
+            background: var(--panel); padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: 16px; box-shadow: 0 2px 6px rgba(0,0,0,.04);
+        }
+        .toolbar .swatch {
+            width: 24px; height: 24px; border-radius: 6px; border: 1px solid #ccc;
+        }
+        .toolbar label { font-size: 14px; opacity: .7; }
+        .toolbar input[type="range"] { width: 180px; }
+        .board-wrap {
+            position: relative; margin-top: 16px;
+            width: fit-content;
+            border-radius: 16px; overflow: hidden;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 12px rgba(0,0,0,.05);
+            background: white;
+        }
+        canvas#canvas, canvas#overlay {
+            display: block;
+            image-rendering: pixelated;
+            cursor: crosshair;
+        }
+        canvas#overlay {
+            position: absolute; inset: 0; pointer-events: none;
+        }
+        .hint {
+            margin-top: 8px; font-size: 12px; opacity: .6;
+        }
+        .spacer { flex: 1; }
+        button.ghost {
+            border: 1px solid var(--border); background: white;
+            border-radius: 10px; padding: 8px 10px; font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <div class="toolbar">
+        <label>Color</label>
+        <label for="colorPicker"></label><input type="color" id="colorPicker" />
+        <div class="swatch" id="colorSwatch"></div>
+
+        <div style="width:1px;height:20px;background:#e6e6ee;margin:0 8px;"></div>
+        <span id="sizeLabel"></span>
+
+        <div class="spacer"></div>
+    </div>
+
+    <div class="board-wrap">
+        <canvas id="canvas"></canvas>
+        <canvas id="overlay"></canvas>
+    </div>
+
+</div>
+
+<script type="module" src="./client.js"></script>
+</body>
+</html>

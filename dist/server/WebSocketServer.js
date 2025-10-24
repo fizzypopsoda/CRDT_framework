@@ -7,13 +7,16 @@ const express_1 = __importDefault(require("express"));
 const http_1 = require("http");
 const ws_1 = require("ws");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const path_1 = __importDefault(require("path"));
 const CanvasState_1 = require("../crdt/CanvasState");
+const path_1 = __importDefault(require("path"));
 const app = (0, express_1.default)();
 const server = (0, http_1.createServer)(app);
 const wss = new ws_1.WebSocketServer({ server });
 const canvas = new CanvasState_1.CanvasState();
-app.use(express_1.default.static(path_1.default.join(__dirname, "../../public")));
+app.use(express_1.default.static(path_1.default.resolve(__dirname, "../public")));
+app.get("/", (req, res) => {
+    res.sendFile(path_1.default.join(__dirname, "../public", "test-client.html"));
+});
 wss.on("connection", (ws) => {
     console.log("Client connected");
     ws.on("message", (msg) => {

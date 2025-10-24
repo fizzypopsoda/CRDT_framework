@@ -2,18 +2,20 @@ import express from "express";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import jwt from "jsonwebtoken";
-import path from "path";
-import { fileURLToPath } from "url";
 import { CanvasState } from "../crdt/CanvasState";
 import { PixelUpdate } from "../crdt/types";
-
+import path from "path";
 const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
+
 const canvas = new CanvasState();
 
-app.use(express.static(path.join(__dirname, "../../public")));
+app.use(express.static(path.resolve(__dirname, "../public")));
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "../public", "test-client.html"));
+});
 
 interface AuthedSocket extends WebSocket {
     userId?: string;
