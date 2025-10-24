@@ -6,9 +6,10 @@ import { CanvasState } from "../crdt/CanvasState";
 import { PixelUpdate } from "../crdt/types";
 import path from "path";
 const app = express();
+setupAuth(app);
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
-
+import { setupAuth } from "./auth";
 
 const canvas = new CanvasState();
 
