@@ -5,11 +5,14 @@ import jwt from "jsonwebtoken";
 import { CanvasState } from "../crdt/CanvasState";
 import { PixelUpdate } from "../crdt/types";
 import path from "path";
+import { setupAuth } from "./auth";
+
+
 const app = express();
 setupAuth(app);
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
-import { setupAuth } from "./auth";
+
 
 const canvas = new CanvasState();
 

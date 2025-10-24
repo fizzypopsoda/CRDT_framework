@@ -9,11 +9,11 @@ const ws_1 = require("ws");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const CanvasState_1 = require("../crdt/CanvasState");
 const path_1 = __importDefault(require("path"));
+const auth_1 = require("./auth");
 const app = (0, express_1.default)();
 (0, auth_1.setupAuth)(app);
 const server = (0, http_1.createServer)(app);
 const wss = new ws_1.WebSocketServer({ server });
-const auth_1 = require("./auth");
 const canvas = new CanvasState_1.CanvasState();
 app.use(express_1.default.static(path_1.default.resolve(__dirname, "../public")));
 app.get("/", (req, res) => {
