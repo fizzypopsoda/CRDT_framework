@@ -5,48 +5,54 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.setupAuth = setupAuth;
 const express_session_1 = __importDefault(require("express-session"));
-const node_cas_client_1 = require("node-cas-client");
+const node_fetch_1 = __importDefault(require("node-fetch"));
 function setupAuth(app) {
+    const CAS_BASE = "https://secure.its.yale.edu/cas";
+    const SERVICE_URL = process.env.SERVICE_URL ||
+        "https://crdt-framework.onrender.com/login";
     app.use((0, express_session_1.default)({
         secret: process.env.SESSION_SECRET || "replace-me",
         resave: false,
         saveUninitialized: true,
     }));
-    const cas = new node_cas_client_1.CASClient({
-        cas_url: "https://secure.its.yale.edu/cas",
-        service_url: process.env.SERVICE_URL || "https://crdt-framework.onrender.com/login",
-        cas_version: "3.0",
-    });
     app.get("/login", async (req, res) => {
+        console.log("DEBUG /login hit:", req.method, req.url);
+        const ticket = req.query.ticket;
+        if (!ticket) {
+            console.log("DEBUG no ticket → redirecting to CAS");
+            const loginUrl = `${CAS_BASE}/login?service=${encodeURIComponent(SERVICE_URL)}`;
+            return res.redirect(loginUrl);
+        }
+        console.log("DEBUG ticket received:", ticket);
+        const validateUrl = `${CAS_BASE}/serviceValidate?ticket=${ticket}&service=${encodeURIComponent(SERVICE_URL)}`;
         try {
-            const ticket = req.query.ticket;
-            if (!ticket) {
-                const loginUrl = await cas.login();
-                return res.redirect(loginUrl);
+            const response = await (0, node_fetch_1.default)(validateUrl);
+            const text = await response.text();
+            const match = text.match(/<cas:user>(.*?)<\/cas:user>/);
+            if (!match) {
+                console.error("CAS validation failed:", text);
+                return res.status(401).send("CAS validation failed");
             }
-            else {
-                const profile = await cas.validate(ticket);
-                req.session.user = profile.user;
-                console.log("✅ Authenticated via Yale CAS:", profile.user);
-                res.redirect("/");
-            }
+            const netid = match[1];
+            req.session.cas_user = netid;
+            console.log("Logged in via Yale CAS:", netid);
+            return res.redirect("/");
         }
         catch (err) {
-            console.error("CAS login failed:", err);
-            res.status(500).send("CAS authentication failed.");
+            console.error("CAS error:", err);
+            return res.status(500).send("CAS authentication error");
         }
     });
     app.get("/logout", (req, res) => {
         req.session.destroy(() => {
-            const logoutUrl = "https://secure.its.yale.edu/cas/logout";
+            const logoutUrl = `${CAS_BASE}/logout?service=${encodeURIComponent(SERVICE_URL)}`;
             res.redirect(logoutUrl);
         });
     });
     app.use((req, res, next) => {
-        if (req.path.startsWith("/login") || req.path.startsWith("/logout"))
-            return next();
-        if (!req.session.user)
+        if (!req.session.cas_user && !req.path.startsWith("/login")) {
             return res.redirect("/login");
+        }
         next();
     });
 }
