@@ -10,7 +10,7 @@ export function setupAuth(app: express.Application) {
 
     app.use(
         session({
-            secret: process.env.SESSION_SECRET || "replace-me",
+            secret: process.env.SESSION_SECRET as string,
             resave: false,
             saveUninitialized: true,
         })
