@@ -1,18 +1,19 @@
-import { createClient } from 'redis';
+
+import { createClient } from "redis";
 
 export const redis = createClient({
     url: process.env.REDIS_URL,
-    socket: {
-        tls: true,
-        rejectUnauthorized: false,
-    },
 });
 
 let connected = false;
 export async function initRedis() {
     if (!connected) {
-        await redis.connect();
-        connected = true;
-        console.log("✅ Connected to Redis Cloud");
+        try {
+            await redis.connect();
+            connected = true;
+            console.log("Connected to Redis Cloud (non-TLS)");
+        } catch (err) {
+            console.error("Redis connection failed:", err);
+        }
     }
 }
