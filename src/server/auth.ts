@@ -7,6 +7,18 @@ export function setupAuth(app: express.Application) {
     const SERVICE_URL =
         process.env.SERVICE_URL ||
         "https://crdt-framework.onrender.com/login";
+    const AUTH_MODE = process.env.AUTH_MODE || "cas";
+
+    if (AUTH_MODE === "disabled") {
+        console.warn("⚠️  CAS auth disabled (for testing only)");
+        app.use((req, _res, next) => {
+            (req.session as any).cas_user = "test-user";
+            next();
+        });
+        app.get("/login", (_req, res) => res.send("Auth disabled for testing"));
+        app.get("/logout", (_req, res) => res.send("Auth disabled for testing"));
+        return;
+    }
 
     app.use(
         session({
