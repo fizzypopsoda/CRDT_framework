@@ -64,9 +64,9 @@ function loadLocalState() {
     catch { }
 }
 function applyAndPersist(update) {
+    // Only update in-memory + on-screen; no localStorage persistence
     if (canvas.apply(update)) {
         drawPixel(update);
-        saveLocalState();
     }
 }
 // Grid coordinates
@@ -139,7 +139,7 @@ function drawCursorLayer() {
     requestAnimationFrame(drawCursorLayer);
 }
 //Init
-loadLocalState();
+// loadLocalState(); // disabled: avoid per-browser divergent state
 resizeCanvas();
 requestAnimationFrame(drawCursorLayer);
 window.addEventListener("resize", resizeCanvas);

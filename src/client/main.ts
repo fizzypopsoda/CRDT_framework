@@ -70,7 +70,8 @@ function loadLocalState() {
     try { (JSON.parse(s) as PixelUpdate[]).forEach(p => canvas.apply(p)); } catch {}
 }
 function applyAndPersist(update: PixelUpdate) {
-    if (canvas.apply(update)) { drawPixel(update); saveLocalState(); }
+    // Only update in-memory + on-screen; no localStorage persistence
+    if (canvas.apply(update)) { drawPixel(update); }
 }
 
 // Grid coordinates
@@ -134,7 +135,7 @@ function drawCursorLayer() {
 }
 
 //Init
-loadLocalState();
+// loadLocalState(); // disabled: avoid per-browser divergent state
 resizeCanvas();
 requestAnimationFrame(drawCursorLayer);
 window.addEventListener("resize", resizeCanvas);
