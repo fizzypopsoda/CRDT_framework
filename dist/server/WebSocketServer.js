@@ -107,6 +107,27 @@ const app = (0, express_1.default)();
                         }
                         break;
                     }
+                    case "PixelBatch": {
+                        if (!ws.userId || !Array.isArray(data.updates))
+                            return;
+                        for (const raw of data.updates) {
+                            const update = { ...raw, userId: ws.userId };
+                            const applied = canvas.apply(update);
+                            // Optional: Ack per operation
+                            if (raw.opId) {
+                                ws.send(JSON.stringify({ type: "Ack", opId: raw.opId }));
+                            }
+                            if (applied) {
+                                await savePixel(update);
+                                for (const client of wss.clients) {
+                                    if (client !== ws && client.readyState === ws_1.WebSocket.OPEN) {
+                                        client.send(JSON.stringify({ type: "PixelUpdate", ...update }));
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
                     case "CURSOR": {
                         if (!ws.userId)
                             return;

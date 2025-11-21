@@ -90,6 +90,32 @@ const app = express();
                         break;
                     }
 
+                    case "PixelBatch": {
+                        if (!ws.userId || !Array.isArray(data.updates)) return;
+
+                        for (const raw of data.updates as PixelUpdate[]) {
+                            const update: PixelUpdate = { ...raw, userId: ws.userId };
+                            const applied = canvas.apply(update);
+
+                            // Optional: Ack per operation
+                            if ((raw as any).opId) {
+                                ws.send(JSON.stringify({ type: "Ack", opId: (raw as any).opId }));
+                            }
+
+                            if (applied) {
+                                await savePixel(update);
+                                for (const client of wss.clients) {
+                                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                                        client.send(
+                                            JSON.stringify({ type: "PixelUpdate", ...update })
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+
                     case "CURSOR": {
                         if (!ws.userId) return;
                         const cursorMsg = {

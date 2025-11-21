@@ -19,11 +19,13 @@ const overlayElem = document.getElementById("overlay") as HTMLCanvasElement;
 const ctx = canvasElem.getContext("2d")!;
 const octx = overlayElem.getContext("2d")!;
 const colorPicker = document.getElementById("colorPicker") as HTMLInputElement;
+const modeToggle = document.getElementById("modeToggle") as HTMLButtonElement | null;
 
 // State
 const canvas = new CanvasState();
 const localUserId = "local-" + Math.random().toString(36).slice(2);
 let currentColor = localStorage.getItem(COLOR_KEY) || "#ff0000";
+let batchingEnabled = true;
 const cursors = new Map<string, { x:number; y:number; color:string; ts:number }>();
 
 colorPicker.value = currentColor;
@@ -31,6 +33,49 @@ colorPicker.addEventListener("input", () => {
     currentColor = colorPicker.value;
     localStorage.setItem(COLOR_KEY, currentColor);
 });
+
+function updateModeUI() {
+    if (!modeToggle) return;
+    modeToggle.textContent = batchingEnabled ? "MODE: BATCHED" : "MODE: PER-PIXEL";
+    modeToggle.classList.toggle("mode-toggle-batched", batchingEnabled);
+    modeToggle.classList.toggle("mode-toggle-perpixel", !batchingEnabled);
+}
+
+modeToggle?.addEventListener("click", () => {
+    batchingEnabled = !batchingEnabled;
+    updateModeUI();
+});
+
+updateModeUI();
+
+// ---- Batching pixel updates over WebSocket ----
+const BATCH_INTERVAL_MS = 40; // ~25fps
+let pendingUpdates: PixelUpdate[] = [];
+let flushTimer: number | null = null;
+
+function flushUpdates() {
+    if (!pendingUpdates.length) return;
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "PixelBatch", updates: pendingUpdates }));
+    }
+    pendingUpdates = [];
+    flushTimer = null;
+}
+
+function enqueueUpdate(update: PixelUpdate) {
+    pendingUpdates.push(update);
+    if (flushTimer === null) {
+        flushTimer = window.setTimeout(flushUpdates, BATCH_INTERVAL_MS);
+    }
+}
+
+function sendUpdate(update: PixelUpdate) {
+    if (batchingEnabled) {
+        enqueueUpdate(update);
+    } else if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "PixelUpdate", ...update }));
+    }
+}
 
 function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
@@ -95,7 +140,10 @@ canvasElem.addEventListener("pointermove", (e) => {
     const g = eventToGrid(e); if (!g) return;
     paintAt(g.gx, g.gy);
 });
-window.addEventListener("pointerup", () => (isDown = false));
+window.addEventListener("pointerup", () => {
+    isDown = false;
+    flushUpdates();
+});
 
 function paintAt(gx: number, gy: number) {
     const update: PixelUpdate = {
@@ -103,9 +151,7 @@ function paintAt(gx: number, gy: number) {
         ts: Date.now(), userId: localUserId, opId: crypto.randomUUID(),
     };
     applyAndPersist(update);
-    if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "PixelUpdate", ...update }));
-    }
+    sendUpdate(update);
 }
 
 //Live cursor

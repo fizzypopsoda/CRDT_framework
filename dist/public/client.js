@@ -38,10 +38,49 @@
   var ctx = canvasElem.getContext("2d");
   var octx = overlayElem.getContext("2d");
   var colorPicker = document.getElementById("colorPicker");
+  var modeToggle = document.getElementById("modeToggle");
   var canvas = new CanvasState();
   var localUserId = "local-" + Math.random().toString(36).slice(2);
   var currentColor = localStorage.getItem(COLOR_KEY) || "#ff0000";
+  var batchingEnabled = true;
   var cursors = /* @__PURE__ */ new Map();
+
+  // ---- Batching pixel updates over WebSocket ----
+  var BATCH_INTERVAL_MS = 40;
+  var pendingUpdates = [];
+  var flushTimer = null;
+  function flushUpdates() {
+    if (!pendingUpdates.length) return;
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "PixelBatch", updates: pendingUpdates }));
+    }
+    pendingUpdates = [];
+    flushTimer = null;
+  }
+  function enqueueUpdate(update) {
+    pendingUpdates.push(update);
+    if (flushTimer === null) {
+      flushTimer = window.setTimeout(flushUpdates, BATCH_INTERVAL_MS);
+    }
+  }
+  function sendUpdate(update) {
+    if (batchingEnabled) {
+      enqueueUpdate(update);
+    } else if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "PixelUpdate", ...update }));
+    }
+  }
+  function updateModeUI() {
+    if (!modeToggle) return;
+    modeToggle.textContent = batchingEnabled ? "MODE: BATCHED" : "MODE: PER-PIXEL";
+    modeToggle.classList.toggle("mode-toggle-batched", batchingEnabled);
+    modeToggle.classList.toggle("mode-toggle-perpixel", !batchingEnabled);
+  }
+  modeToggle == null ? void 0 : modeToggle.addEventListener("click", () => {
+    batchingEnabled = !batchingEnabled;
+    updateModeUI();
+  });
+  updateModeUI();
   colorPicker.value = currentColor;
   colorPicker.addEventListener("input", () => {
     currentColor = colorPicker.value;
@@ -81,9 +120,9 @@
     }
   }
   function applyAndPersist(update) {
+    // Only update in-memory and on-screen; no localStorage persistence
     if (canvas.apply(update)) {
       drawPixel(update);
-      saveLocalState();
     }
   }
   function eventToGrid(e) {
@@ -107,7 +146,10 @@
     if (!g) return;
     paintAt(g.gx, g.gy);
   });
-  window.addEventListener("pointerup", () => isDown = false);
+  window.addEventListener("pointerup", () => {
+    isDown = false;
+    flushUpdates();
+  });
   function paintAt(gx, gy) {
     const update = {
       canvasId: "default",
@@ -119,9 +161,7 @@
       opId: crypto.randomUUID()
     };
     applyAndPersist(update);
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "PixelUpdate", ...update }));
-    }
+    sendUpdate(update);
   }
   var lastSent = 0;
   function sendCursor(e) {
@@ -151,7 +191,7 @@
     }
     requestAnimationFrame(drawCursorLayer);
   }
-  loadLocalState();
+  // loadLocalState(); // disabled so all tabs use only server state
   resizeCanvas();
   requestAnimationFrame(drawCursorLayer);
   window.addEventListener("resize", resizeCanvas);

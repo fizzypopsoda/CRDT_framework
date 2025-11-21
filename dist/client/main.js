@@ -16,16 +16,56 @@ const overlayElem = document.getElementById("overlay");
 const ctx = canvasElem.getContext("2d");
 const octx = overlayElem.getContext("2d");
 const colorPicker = document.getElementById("colorPicker");
+const modeLabel = document.getElementById("modeLabel");
+const modeToggle = document.getElementById("modeToggle");
 // State
 const canvas = new CanvasState_1.CanvasState();
 const localUserId = "local-" + Math.random().toString(36).slice(2);
 let currentColor = localStorage.getItem(COLOR_KEY) || "#ff0000";
+let batchingEnabled = true;
 const cursors = new Map();
 colorPicker.value = currentColor;
 colorPicker.addEventListener("input", () => {
     currentColor = colorPicker.value;
     localStorage.setItem(COLOR_KEY, currentColor);
 });
+function updateModeUI() {
+    if (!modeLabel)
+        return;
+    modeLabel.textContent = batchingEnabled ? "MODE: BATCHED" : "MODE: PER-PIXEL";
+}
+modeToggle?.addEventListener("click", () => {
+    batchingEnabled = !batchingEnabled;
+    updateModeUI();
+});
+updateModeUI();
+// ---- Batching pixel updates over WebSocket ----
+const BATCH_INTERVAL_MS = 40; // ~25fps
+let pendingUpdates = [];
+let flushTimer = null;
+function flushUpdates() {
+    if (!pendingUpdates.length)
+        return;
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "PixelBatch", updates: pendingUpdates }));
+    }
+    pendingUpdates = [];
+    flushTimer = null;
+}
+function enqueueUpdate(update) {
+    pendingUpdates.push(update);
+    if (flushTimer === null) {
+        flushTimer = window.setTimeout(flushUpdates, BATCH_INTERVAL_MS);
+    }
+}
+function sendUpdate(update) {
+    if (batchingEnabled) {
+        enqueueUpdate(update);
+    }
+    else if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "PixelUpdate", ...update }));
+    }
+}
 function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
     const cssW = GRID * PIXEL_SIZE;
@@ -96,16 +136,17 @@ canvasElem.addEventListener("pointermove", (e) => {
         return;
     paintAt(g.gx, g.gy);
 });
-window.addEventListener("pointerup", () => (isDown = false));
+window.addEventListener("pointerup", () => {
+    isDown = false;
+    flushUpdates();
+});
 function paintAt(gx, gy) {
     const update = {
         canvasId: "default", x: gx, y: gy, color: currentColor,
         ts: Date.now(), userId: localUserId, opId: crypto.randomUUID(),
     };
     applyAndPersist(update);
-    if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "PixelUpdate", ...update }));
-    }
+    sendUpdate(update);
 }
 //Live cursor
 let lastSent = 0;
