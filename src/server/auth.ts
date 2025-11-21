@@ -7,7 +7,11 @@ export function setupAuth(app: express.Application) {
     const SERVICE_URL =
         process.env.SERVICE_URL ||
         "https://crdt-framework.onrender.com/login";
-    const AUTH_MODE = process.env.AUTH_MODE || "cas";
+    // Default to auth DISABLED locally unless AUTH_MODE is explicitly set.
+    // This means:
+    //   - Local dev (no AUTH_MODE) -> "disabled"
+    //   - Render / prod (AUTH_MODE=cas) -> CAS enabled
+    const AUTH_MODE = process.env.AUTH_MODE ?? "disabled";
 
     app.use(
         session({

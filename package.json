@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc && mkdir -p dist/public && cp -r public/* dist/public/",
     "start": "node dist/server/WebSocketServer.js",
-    "dev": "ts-node src/server/WebSocketServer.ts"
+    "dev": "tsx src/server/WebSocketServer.ts"
   },
   "private": true,
   "keywords": [],

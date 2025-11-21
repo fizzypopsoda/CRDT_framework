@@ -10,7 +10,7 @@ import { initRedis, redis } from "./redis"; // ✅ NEW
 const app = express();
 
 (async () => {
-    const { setupAuth } = await import("./auth.js");
+    const { setupAuth } = await import("./auth");
     setupAuth(app);
 
     await initRedis();
@@ -38,9 +38,16 @@ const app = express();
         if (keys.length) await redis.hDel("canvas:default:pixels", keys);
     }
 
-    app.use(express.static(path.resolve(__dirname, "../public")));
-    app.get("/", (req, res) => {
-        res.sendFile(path.join(__dirname, "../public", "test-client.html"));
+    // Serve static client files
+    // - In dev (__dirname is src/server) -> public is at ../../public
+    // - In prod (__dirname is dist/server) -> public is at ../public (copied by build)
+    const publicPath = path.resolve(
+        __dirname,
+        __dirname.includes("dist") ? "../public" : "../../public"
+    );
+    app.use(express.static(publicPath));
+    app.get("/", (_req, res) => {
+        res.sendFile(path.join(publicPath, "test-client.html"));
     });
 
     interface AuthedSocket extends WebSocket {

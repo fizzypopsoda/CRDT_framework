@@ -10,11 +10,34 @@ function setupAuth(app) {
     const CAS_BASE = "https://secure.its.yale.edu/cas";
     const SERVICE_URL = process.env.SERVICE_URL ||
         "https://crdt-framework.onrender.com/login";
+    // Default to auth DISABLED locally unless AUTH_MODE is explicitly set.
+    // This means:
+    //   - Local dev (no AUTH_MODE) -> "disabled"
+    //   - Render / prod (AUTH_MODE=cas) -> CAS enabled
+    const AUTH_MODE = process.env.AUTH_MODE ?? "disabled";
     app.use((0, express_session_1.default)({
-        secret: process.env.SESSION_SECRET || "replace-me",
+        secret: process.env.SESSION_SECRET || "temporary-secret",
         resave: false,
         saveUninitialized: true,
+        cookie: {
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+        },
     }));
+    if (AUTH_MODE === "disabled") {
+        console.warn("⚠️  CAS auth disabled (for testing only)");
+        app.use((req, _res, next) => {
+            if (!req.session) {
+                // @ts-ignore safeguard
+                req.session = {};
+            }
+            req.session.cas_user = "test-user";
+            next();
+        });
+        app.get("/login", (_req, res) => res.send("Auth disabled for testing"));
+        app.get("/logout", (_req, res) => res.send("Auth disabled for testing"));
+        return;
+    }
     app.get("/login", async (req, res) => {
         console.log("DEBUG /login hit:", req.method, req.url);
         const ticket = req.query.ticket;
