@@ -1,20 +1,31 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8" />
-    <title>CRDT Pixel Canvas</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixel Canvas</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
         :root {
-            --panel: #f7f7fb;
-            --ink: #222;
-            --accent: #7c5cff;
-            --border: #ddd;
+            --bg: #f5e6ff;
+            --bg-dark: #d4a5e8;
+            --bg-light: #fff0ff;
+            --panel: #ffe6f5;
+            --ink: #6b4c7a;
+            --accent: #b19cd9;
+            --border: #c895d9;
         }
         * { box-sizing: border-box; }
         body {
             margin: 0; padding: 24px;
-            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-            color: var(--ink); background: #fafbff;
+            font-family: "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+            font-size: 10px;
+            color: var(--ink);
+            background: var(--bg);
+            background-image:
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(177,156,217,.1) 2px, rgba(177,156,217,.1) 4px),
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(177,156,217,.1) 2px, rgba(177,156,217,.1) 4px);
         }
         .app {
             max-width: 1080px; margin: 0 auto;
@@ -22,20 +33,27 @@
         .toolbar {
             display: flex; gap: 12px; align-items: center;
             background: var(--panel); padding: 12px 14px;
-            border: 1px solid var(--border);
-            border-radius: 16px; box-shadow: 0 2px 6px rgba(0,0,0,.04);
+            border: 3px outset var(--bg-light);
+            border-radius: 8px; box-shadow: 0 4px 0 var(--border);
         }
         .toolbar .swatch {
-            width: 24px; height: 24px; border-radius: 6px; border: 1px solid #ccc;
+            width: 24px; height: 24px;
+            border-radius: 4px;
+            border: 3px inset var(--bg-dark);
         }
-        .toolbar label { font-size: 14px; opacity: .7; }
+        .toolbar label {
+            font-size: 9px;
+            opacity: .8;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
         .toolbar input[type="range"] { width: 180px; }
         .board-wrap {
             position: relative; margin-top: 16px;
             width: fit-content;
-            border-radius: 16px; overflow: hidden;
-            border: 1px solid var(--border);
-            box-shadow: 0 4px 12px rgba(0,0,0,.05);
+            border-radius: 12px; overflow: hidden;
+            border: 4px outset var(--bg-light);
+            box-shadow: 0 6px 0 var(--border);
             background: white;
         }
         canvas#canvas, canvas#overlay {
