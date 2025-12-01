@@ -31,6 +31,7 @@
   var PIXEL_SIZE = 14;
   var LOCAL_KEY = "localCanvasState";
   var COLOR_KEY = "ui.color";
+  var QUEUE_KEY = "offlinePixelQueue";
   var wsUrl = location.protocol === "https:" ? `wss://${location.host}` : `ws://${location.host}`;
   var ws = new WebSocket(wsUrl);
   var canvasElem = document.getElementById("canvas");
@@ -45,10 +46,32 @@
   var batchingEnabled = true;
   var cursors = /* @__PURE__ */ new Map();
 
-  // ---- Batching pixel updates over WebSocket ----
   var BATCH_INTERVAL_MS = 40;
   var pendingUpdates = [];
   var flushTimer = null;
+
+  var offlineQueue = [];
+
+  function loadOfflineQueue() {
+    const raw = localStorage.getItem(QUEUE_KEY);
+    if (!raw) return;
+    try {
+      offlineQueue = JSON.parse(raw);
+    } catch {
+      offlineQueue = [];
+    }
+  }
+
+  function saveOfflineQueue() {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(offlineQueue));
+  }
+
+  function flushOfflineQueue() {
+    if (!offlineQueue.length || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "PixelBatch", updates: offlineQueue }));
+    offlineQueue = [];
+    saveOfflineQueue();
+  }
   function flushUpdates() {
     if (!pendingUpdates.length) return;
     if (ws.readyState === WebSocket.OPEN) {
@@ -64,10 +87,15 @@
     }
   }
   function sendUpdate(update) {
-    if (batchingEnabled) {
-      enqueueUpdate(update);
-    } else if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "PixelUpdate", ...update }));
+    if (ws.readyState === WebSocket.OPEN) {
+      if (batchingEnabled) {
+        enqueueUpdate(update);
+      } else {
+        ws.send(JSON.stringify({ type: "PixelUpdate", ...update }));
+      }
+    } else {
+      offlineQueue.push(update);
+      saveOfflineQueue();
     }
   }
   function updateModeUI() {
@@ -120,7 +148,6 @@
     }
   }
   function applyAndPersist(update) {
-    // Only update in-memory and on-screen; no localStorage persistence
     if (canvas.apply(update)) {
       drawPixel(update);
     }
@@ -191,12 +218,20 @@
     }
     requestAnimationFrame(drawCursorLayer);
   }
-  // loadLocalState(); // disabled so all tabs use only server state
+  loadOfflineQueue();
   resizeCanvas();
   requestAnimationFrame(drawCursorLayer);
   window.addEventListener("resize", resizeCanvas);
   ws.onopen = () => {
     ws.send(JSON.stringify({ type: "AUTH", idToken: "fake-yale-token" }));
+    flushOfflineQueue();
+    updateStatusUI();
+  };
+  ws.onclose = () => {
+    updateStatusUI();
+  };
+  ws.onerror = () => {
+    updateStatusUI();
   };
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);

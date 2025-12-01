@@ -70,15 +70,7 @@
         .spacer { flex: 1; }
 
         /* Pixel-style toggle UI */
-        #modeLabel {
-            font-size: 8px;
-            padding: 4px 6px;
-            background: var(--bg-light);
-            border: 2px inset var(--bg-dark);
-            border-radius: 4px;
-        }
-
-        #modeToggle.ghost {
+        #modeToggle.mode-toggle {
             font-family: "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
             font-size: 8px;
             text-transform: uppercase;
@@ -92,13 +84,40 @@
             cursor: pointer;
         }
 
-        #modeToggle.ghost:hover {
+        #modeToggle.mode-toggle-batched {
+            background: #d1fae5; /* light green-ish when batched */
+        }
+
+        #modeToggle.mode-toggle-perpixel {
+            background: #fee2e2; /* light red-ish when per-pixel */
+        }
+
+        #modeToggle.mode-toggle:hover {
             background: var(--panel);
         }
 
-        #modeToggle.ghost:active {
+        #modeToggle.mode-toggle:active {
             border-style: inset;
             transform: translateY(1px);
+        }
+
+        /* Online / Offline status badge */
+        #statusBadge {
+            font-family: "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+            font-size: 8px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 3px outset var(--bg-light);
+            margin-left: 8px;
+        }
+        #statusBadge.status-online {
+            background: #d1fae5; /* pastel green */
+            color: #14532d;
+        }
+        #statusBadge.status-offline {
+            background: #fee2e2; /* pastel red */
+            color: #7f1d1d;
+            border-color: #fca5a5;
         }
     </style>
 </head>
@@ -114,8 +133,9 @@
         <span id="sizeLabel"></span>
 
         <div style="width:1px;height:20px;background:#e6e6ee;margin:0 8px;"></div>
-        <span id="modeLabel">MODE: BATCHED</span>
-        <button id="modeToggle" class="ghost">Toggle</button>
+        <button id="modeToggle" class="mode-toggle mode-toggle-batched">MODE: BATCHED</button>
+
+        <span id="statusBadge" class="status-online">ONLINE</span>
 
         <div class="spacer"></div>
     </div>

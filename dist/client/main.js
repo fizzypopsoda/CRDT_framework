@@ -6,6 +6,7 @@ const GRID = 100;
 const PIXEL_SIZE = 14;
 const LOCAL_KEY = "localCanvasState";
 const COLOR_KEY = "ui.color";
+const QUEUE_KEY = "offlinePixelQueue";
 const wsUrl = location.protocol === "https:"
     ? `wss://${location.host}`
     : `ws://${location.host}`;
@@ -16,8 +17,8 @@ const overlayElem = document.getElementById("overlay");
 const ctx = canvasElem.getContext("2d");
 const octx = overlayElem.getContext("2d");
 const colorPicker = document.getElementById("colorPicker");
-const modeLabel = document.getElementById("modeLabel");
 const modeToggle = document.getElementById("modeToggle");
+const statusBadge = document.getElementById("statusBadge");
 // State
 const canvas = new CanvasState_1.CanvasState();
 const localUserId = "local-" + Math.random().toString(36).slice(2);
@@ -30,9 +31,25 @@ colorPicker.addEventListener("input", () => {
     localStorage.setItem(COLOR_KEY, currentColor);
 });
 function updateModeUI() {
-    if (!modeLabel)
+    if (!modeToggle)
         return;
-    modeLabel.textContent = batchingEnabled ? "MODE: BATCHED" : "MODE: PER-PIXEL";
+    modeToggle.textContent = batchingEnabled ? "MODE: BATCHED" : "MODE: PER-PIXEL";
+    modeToggle.classList.toggle("mode-toggle-batched", batchingEnabled);
+    modeToggle.classList.toggle("mode-toggle-perpixel", !batchingEnabled);
+}
+function updateStatusUI() {
+    if (!statusBadge)
+        return;
+    const online = ws.readyState === WebSocket.OPEN;
+    statusBadge.classList.toggle("status-online", online);
+    statusBadge.classList.toggle("status-offline", !online);
+    if (online) {
+        const queued = offlineQueue.length;
+        statusBadge.textContent = queued > 0 ? `SYNCING ${queued}` : "ONLINE";
+    }
+    else {
+        statusBadge.textContent = `OFFLINE (${offlineQueue.length})`;
+    }
 }
 modeToggle?.addEventListener("click", () => {
     batchingEnabled = !batchingEnabled;
@@ -43,6 +60,32 @@ updateModeUI();
 const BATCH_INTERVAL_MS = 40; // ~25fps
 let pendingUpdates = [];
 let flushTimer = null;
+// ---- Offline queue for PixelUpdate operations ----
+let offlineQueue = [];
+function loadOfflineQueue() {
+    const raw = localStorage.getItem(QUEUE_KEY);
+    if (!raw)
+        return;
+    try {
+        offlineQueue = JSON.parse(raw);
+    }
+    catch {
+        offlineQueue = [];
+    }
+    updateStatusUI();
+}
+function saveOfflineQueue() {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(offlineQueue));
+    updateStatusUI();
+}
+function flushOfflineQueue() {
+    if (!offlineQueue.length || ws.readyState !== WebSocket.OPEN)
+        return;
+    ws.send(JSON.stringify({ type: "PixelBatch", updates: offlineQueue }));
+    offlineQueue = [];
+    saveOfflineQueue();
+    updateStatusUI();
+}
 function flushUpdates() {
     if (!pendingUpdates.length)
         return;
@@ -59,11 +102,18 @@ function enqueueUpdate(update) {
     }
 }
 function sendUpdate(update) {
-    if (batchingEnabled) {
-        enqueueUpdate(update);
+    if (ws.readyState === WebSocket.OPEN) {
+        if (batchingEnabled) {
+            enqueueUpdate(update);
+        }
+        else {
+            ws.send(JSON.stringify({ type: "PixelUpdate", ...update }));
+        }
     }
-    else if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "PixelUpdate", ...update }));
+    else {
+        // Offline: queue the update locally for later sync
+        offlineQueue.push(update);
+        saveOfflineQueue();
     }
 }
 function resizeCanvas() {
@@ -180,12 +230,20 @@ function drawCursorLayer() {
     requestAnimationFrame(drawCursorLayer);
 }
 //Init
+loadOfflineQueue();
 // loadLocalState(); // disabled: avoid per-browser divergent state
 resizeCanvas();
 requestAnimationFrame(drawCursorLayer);
 window.addEventListener("resize", resizeCanvas);
 ws.onopen = () => {
     ws.send(JSON.stringify({ type: "AUTH", idToken: "fake-yale-token" }));
+    flushOfflineQueue();
+};
+ws.onclose = () => {
+    updateStatusUI();
+};
+ws.onerror = () => {
+    updateStatusUI();
 };
 ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);

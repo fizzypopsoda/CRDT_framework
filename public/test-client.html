@@ -100,6 +100,24 @@
             border-style: inset;
             transform: translateY(1px);
         }
+
+        #statusBadge {
+            font-family: "Press Start 2P", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+            font-size: 8px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 3px outset var(--bg-light);
+            margin-left: 8px;
+        }
+        #statusBadge.status-online {
+            background: #d1fae5; 
+            color: #14532d;
+        }
+        #statusBadge.status-offline {
+            background: #fee2e2; 
+            color: #7f1d1d;
+            border-color: #fca5a5;
+        }
     </style>
 </head>
 <body>
@@ -115,6 +133,8 @@
 
         <div style="width:1px;height:20px;background:#e6e6ee;margin:0 8px;"></div>
         <button id="modeToggle" class="mode-toggle mode-toggle-batched">MODE: BATCHED</button>
+
+        <span id="statusBadge" class="status-online">ONLINE</span>
 
         <div class="spacer"></div>
     </div>

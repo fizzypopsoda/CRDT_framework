@@ -6,6 +6,7 @@ const GRID = 100;
 const PIXEL_SIZE = 14;
 const LOCAL_KEY = "localCanvasState";
 const COLOR_KEY = "ui.color";
+const QUEUE_KEY = "offlinePixelQueue";
 
 const wsUrl =
     location.protocol === "https:"
@@ -20,6 +21,7 @@ const ctx = canvasElem.getContext("2d")!;
 const octx = overlayElem.getContext("2d")!;
 const colorPicker = document.getElementById("colorPicker") as HTMLInputElement;
 const modeToggle = document.getElementById("modeToggle") as HTMLButtonElement | null;
+const statusBadge = document.getElementById("statusBadge") as HTMLElement | null;
 
 // State
 const canvas = new CanvasState();
@@ -41,6 +43,19 @@ function updateModeUI() {
     modeToggle.classList.toggle("mode-toggle-perpixel", !batchingEnabled);
 }
 
+function updateStatusUI() {
+    if (!statusBadge) return;
+    const online = ws.readyState === WebSocket.OPEN;
+    statusBadge.classList.toggle("status-online", online);
+    statusBadge.classList.toggle("status-offline", !online);
+    if (online) {
+        const queued = offlineQueue.length;
+        statusBadge.textContent = queued > 0 ? `SYNCING ${queued}` : "ONLINE";
+    } else {
+        statusBadge.textContent = `OFFLINE (${offlineQueue.length})`;
+    }
+}
+
 modeToggle?.addEventListener("click", () => {
     batchingEnabled = !batchingEnabled;
     updateModeUI();
@@ -52,6 +67,34 @@ updateModeUI();
 const BATCH_INTERVAL_MS = 40; // ~25fps
 let pendingUpdates: PixelUpdate[] = [];
 let flushTimer: number | null = null;
+
+// ---- Offline queue for PixelUpdate operations ----
+let offlineQueue: PixelUpdate[] = [];
+
+function loadOfflineQueue() {
+    const raw = localStorage.getItem(QUEUE_KEY);
+    if (!raw) return;
+    try {
+        offlineQueue = JSON.parse(raw) as PixelUpdate[];
+    } catch {
+        offlineQueue = [];
+    }
+
+    updateStatusUI();
+}
+
+function saveOfflineQueue() {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(offlineQueue));
+    updateStatusUI();
+}
+
+function flushOfflineQueue() {
+    if (!offlineQueue.length || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "PixelBatch", updates: offlineQueue }));
+    offlineQueue = [];
+    saveOfflineQueue();
+    updateStatusUI();
+}
 
 function flushUpdates() {
     if (!pendingUpdates.length) return;
@@ -70,10 +113,16 @@ function enqueueUpdate(update: PixelUpdate) {
 }
 
 function sendUpdate(update: PixelUpdate) {
-    if (batchingEnabled) {
-        enqueueUpdate(update);
-    } else if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "PixelUpdate", ...update }));
+    if (ws.readyState === WebSocket.OPEN) {
+        if (batchingEnabled) {
+            enqueueUpdate(update);
+        } else {
+            ws.send(JSON.stringify({ type: "PixelUpdate", ...update }));
+        }
+    } else {
+        // Offline: queue the update locally for later sync
+        offlineQueue.push(update);
+        saveOfflineQueue();
     }
 }
 
@@ -181,6 +230,7 @@ function drawCursorLayer() {
 }
 
 //Init
+loadOfflineQueue();
 // loadLocalState(); // disabled: avoid per-browser divergent state
 resizeCanvas();
 requestAnimationFrame(drawCursorLayer);
@@ -188,6 +238,15 @@ window.addEventListener("resize", resizeCanvas);
 
 ws.onopen = () => {
     ws.send(JSON.stringify({ type: "AUTH", idToken: "fake-yale-token" }));
+    flushOfflineQueue();
+};
+
+ws.onclose = () => {
+    updateStatusUI();
+};
+
+ws.onerror = () => {
+    updateStatusUI();
 };
 ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
