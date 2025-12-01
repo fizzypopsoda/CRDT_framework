@@ -52,18 +52,36 @@
 
   var offlineQueue = [];
 
+  function updateStatusUI() {
+    if (!statusBadge) return;
+    const online = navigator.onLine && ws.readyState === WebSocket.OPEN;
+    statusBadge.classList.toggle("status-online", online);
+    statusBadge.classList.toggle("status-offline", !online);
+    if (online) {
+      const queued = offlineQueue.length;
+      statusBadge.textContent = queued > 0 ? `SYNCING ${queued}` : "ONLINE";
+    } else {
+      statusBadge.textContent = `OFFLINE (${offlineQueue.length})`;
+    }
+  }
+
   function loadOfflineQueue() {
     const raw = localStorage.getItem(QUEUE_KEY);
-    if (!raw) return;
+    if (!raw) {
+      updateStatusUI();
+      return;
+    }
     try {
       offlineQueue = JSON.parse(raw);
     } catch {
       offlineQueue = [];
     }
+    updateStatusUI();
   }
 
   function saveOfflineQueue() {
     localStorage.setItem(QUEUE_KEY, JSON.stringify(offlineQueue));
+    updateStatusUI();
   }
 
   function flushOfflineQueue() {
@@ -233,6 +251,12 @@
   ws.onerror = () => {
     updateStatusUI();
   };
+  window.addEventListener("online", () => {
+    updateStatusUI();
+  });
+  window.addEventListener("offline", () => {
+    updateStatusUI();
+  });
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     if (msg.type === "SNAPSHOT") {

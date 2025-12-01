@@ -45,7 +45,7 @@ function updateModeUI() {
 
 function updateStatusUI() {
     if (!statusBadge) return;
-    const online = ws.readyState === WebSocket.OPEN;
+    const online = navigator.onLine && ws.readyState === WebSocket.OPEN;
     statusBadge.classList.toggle("status-online", online);
     statusBadge.classList.toggle("status-offline", !online);
     if (online) {
@@ -239,6 +239,7 @@ window.addEventListener("resize", resizeCanvas);
 ws.onopen = () => {
     ws.send(JSON.stringify({ type: "AUTH", idToken: "fake-yale-token" }));
     flushOfflineQueue();
+    updateStatusUI();
 };
 
 ws.onclose = () => {
@@ -248,6 +249,14 @@ ws.onclose = () => {
 ws.onerror = () => {
     updateStatusUI();
 };
+
+window.addEventListener("online", () => {
+    updateStatusUI();
+});
+
+window.addEventListener("offline", () => {
+    updateStatusUI();
+});
 ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     if (msg.type === "SNAPSHOT") {
