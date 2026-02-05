@@ -1,0 +1,61 @@
+{
+    "root_group": {
+        "groups": {},
+        "checks": {},
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "metrics": {
+        "vus": {
+            "value": 299,
+            "min": 1,
+            "max": 299
+        },
+        "batches_sent": {
+            "count": 299,
+            "rate": 1.8120868044366165
+        },
+        "ws_connecting": {
+            "max": 2.843042,
+            "p(90)": 0.9610082,
+            "p(95)": 1.1859585999999998,
+            "avg": 0.7585298327759197,
+            "min": 0.416375,
+            "med": 0.691708
+        },
+        "ws_msgs_sent": {
+            "rate": 3.624173608873233,
+            "count": 598
+        },
+        "round_trip_latency_batch": {
+            "avg": 38312.30280936455,
+            "min": 0,
+            "med": 33533.5,
+            "max": 134612,
+            "p(90)": 77811,
+            "p(95)": 91111.55
+        },
+        "vus_max": {
+            "value": 300,
+            "min": 300,
+            "max": 300
+        },
+        "data_sent": {
+            "count": 363705,
+            "rate": 2204.230873604079
+        },
+        "data_received": {
+            "count": 91493320,
+            "rate": 554494.441023735
+        },
+        "ws_sessions": {
+            "count": 299,
+            "rate": 1.8120868044366165
+        },
+        "ws_msgs_received": {
+            "count": 45448,
+            "rate": 275.4371942743657
+        }
+    }
+}

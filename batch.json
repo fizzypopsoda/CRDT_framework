@@ -1,0 +1,53 @@
+{
+    "root_group": {
+        "checks": {},
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {}
+    },
+    "metrics": {
+        "ws_msgs_sent": {
+            "count": 598,
+            "rate": 3.62391969772098
+        },
+        "ws_msgs_received": {
+            "count": 598,
+            "rate": 3.62391969772098
+        },
+        "vus": {
+            "value": 299,
+            "min": 1,
+            "max": 299
+        },
+        "data_sent": {
+            "count": 363726,
+            "rate": 2204.203705640905
+        },
+        "data_received": {
+            "count": 87778626,
+            "rate": 531944.3006693695
+        },
+        "ws_connecting": {
+            "p(90)": 0.9604912000000001,
+            "p(95)": 1.1263834,
+            "avg": 0.7555664581939797,
+            "min": 0.359208,
+            "med": 0.68325,
+            "max": 5.162417
+        },
+        "ws_sessions": {
+            "count": 299,
+            "rate": 1.81195984886049
+        },
+        "batches_sent": {
+            "count": 299,
+            "rate": 1.81195984886049
+        },
+        "vus_max": {
+            "max": 300,
+            "value": 300,
+            "min": 300
+        }
+    }
+}

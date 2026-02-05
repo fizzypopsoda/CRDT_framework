@@ -36,28 +36,53 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-// server/WebSocketServer.ts (or .js)
 const express_1 = __importDefault(require("express"));
 const http_1 = require("http");
 const ws_1 = require("ws");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const CanvasState_1 = require("../crdt/CanvasState");
 const path_1 = __importDefault(require("path"));
+const redis_1 = require("./redis"); // ✅ NEW
 const app = (0, express_1.default)();
+const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
 (async () => {
-    // If using TS, use: const { setupAuth } = await import("./auth");
     const { setupAuth } = await Promise.resolve().then(() => __importStar(require("./auth.js")));
     setupAuth(app);
+    await (0, redis_1.initRedis)();
     const server = (0, http_1.createServer)(app);
     const wss = new ws_1.WebSocketServer({ server });
     const canvas = new CanvasState_1.CanvasState();
+    async function loadCanvas() {
+        if (!useRedis || !redis_1.redis)
+            return;
+        const data = await redis_1.redis.hGetAll("canvas:default:pixels");
+        for (const field in data) {
+            const pixel = JSON.parse(data[field]);
+            canvas.apply(pixel);
+        }
+        console.log(`Loaded ${Object.keys(data).length} pixels from Redis`);
+    }
+    await loadCanvas();
+    async function savePixel(update) {
+        if (!useRedis || !redis_1.redis)
+            return;
+        const field = `${update.x}:${update.y}`;
+        await redis_1.redis.hSet("canvas:default:pixels", field, JSON.stringify(update));
+    }
+    async function clearCanvas() {
+        if (!useRedis || !redis_1.redis)
+            return;
+        const keys = await redis_1.redis.hKeys("canvas:default:pixels");
+        if (keys.length)
+            await redis_1.redis.hDel("canvas:default:pixels", keys);
+    }
     app.use(express_1.default.static(path_1.default.resolve(__dirname, "../public")));
     app.get("/", (req, res) => {
         res.sendFile(path_1.default.join(__dirname, "../public", "test-client.html"));
     });
     wss.on("connection", (ws) => {
         console.log("Client connected");
-        ws.on("message", (msg) => {
+        ws.on("message", async (msg) => {
             try {
                 const data = JSON.parse(msg.toString());
                 switch (data.type) {
@@ -76,10 +101,27 @@ const app = (0, express_1.default)();
                         const applied = canvas.apply(update);
                         ws.send(JSON.stringify({ type: "Ack", opId: data.opId }));
                         if (applied) {
+                            await savePixel(update);
                             for (const client of wss.clients) {
                                 if (client !== ws && client.readyState === ws_1.WebSocket.OPEN) {
                                     client.send(JSON.stringify({ type: "PixelUpdate", ...update }));
                                 }
+                            }
+                        }
+                        break;
+                    }
+                    case "BatchUpdate": {
+                        if (!ws.userId)
+                            return;
+                        for (const update of data.updates) {
+                            const fullUpdate = { ...update, userId: ws.userId };
+                            const applied = canvas.apply(fullUpdate);
+                            if (applied)
+                                await savePixel(fullUpdate);
+                        }
+                        for (const client of wss.clients) {
+                            if (client.readyState === ws_1.WebSocket.OPEN) {
+                                client.send(JSON.stringify({ type: "BatchUpdate", updates: data.updates }));
                             }
                         }
                         break;
@@ -104,6 +146,7 @@ const app = (0, express_1.default)();
                     }
                     case "CLEAR": {
                         canvas.clear();
+                        await clearCanvas();
                         for (const client of wss.clients) {
                             if (client.readyState === ws_1.WebSocket.OPEN) {
                                 client.send(JSON.stringify({ type: "CLEAR" }));

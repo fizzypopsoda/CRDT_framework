@@ -2,6 +2,11 @@ import express from "express";
 import session from "express-session";
 import fetch from "node-fetch";
 
+declare module "express-session" {
+    interface SessionData {
+        cas_user?: string;
+    }
+}
 export function setupAuth(app: express.Application) {
     const CAS_BASE = "https://secure.its.yale.edu/cas";
     const SERVICE_URL =
@@ -25,11 +30,9 @@ export function setupAuth(app: express.Application) {
         console.warn("⚠️  CAS auth disabled (for testing only)");
 
         app.use((req, _res, next) => {
-            if (!req.session) {
-                // @ts-ignore safeguard
-                req.session = {};
+            if (!req.session.cas_user) {
+                (req.session as any).cas_user = "guest";
             }
-            (req.session as any).cas_user = "test-user";
             next();
         });
 

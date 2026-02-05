@@ -5,15 +5,20 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5cfc421f-39ad-4776-b40f-41f5f78bcbbd" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.env" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/index.js" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/index.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/public/test-client.html" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/crdt/CanvasState.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/crdt/types.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/server/WebSocketServer.ts" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/CanvasState.test.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tests.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dist/server/WebSocketServer.js" beforeDir="false" afterPath="$PROJECT_DIR$/dist/server/WebSocketServer.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dist/server/auth.js" beforeDir="false" afterPath="$PROJECT_DIR$/dist/server/auth.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/load_test_batched.js" beforeDir="false" afterPath="$PROJECT_DIR$/tests/load_test_batched.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/loadtest.js" beforeDir="false" afterPath="$PROJECT_DIR$/tests/loadtest.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/client.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/test-client.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/client/main.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/client/main.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/load_test_per_pixel.js" beforeDir="false" afterPath="$PROJECT_DIR$/src/load_test_per_pixel.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/server/WebSocketServer.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/server/WebSocketServer.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/server/auth.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/server/auth.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/server/redis.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/server/redis.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -60,6 +65,7 @@
 }</component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/tests" />
       <recent name="$PROJECT_DIR$/src/crdt" />
     </key>
   </component>
@@ -78,6 +84,9 @@
       <option name="presentableId" value="Default" />
       <updated>1758770115431</updated>
       <workItem from="1758770116406" duration="27034000" />
+      <workItem from="1764552397522" duration="10595000" />
+      <workItem from="1769048492761" duration="393000" />
+      <workItem from="1770324392285" duration="3447000" />
     </task>
     <servers />
   </component>

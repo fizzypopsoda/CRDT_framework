@@ -5,9 +5,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "tsc && mkdir -p dist/public && cp -r public/* dist/public/",
+    "build": "tsc && mkdir -p dist/public && cp -r src/public/* dist/public/",
     "start": "node dist/server/WebSocketServer.js",
-    "dev": "ts-node src/server/WebSocketServer.ts"
+    "dev": "npx ts-node src/server/WebSocketServer.ts"
   },
   "private": true,
   "keywords": [],

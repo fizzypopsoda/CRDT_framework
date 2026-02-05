@@ -5,12 +5,14 @@ import jwt from "jsonwebtoken";
 import { CanvasState } from "../crdt/CanvasState";
 import { PixelUpdate } from "../crdt/types";
 import path from "path";
-import { initRedis, redis } from "./redis"; // ✅ NEW
+import { initRedis, redis } from "./redis";
+import { getAssignedVariant, logExposure, logEvent } from "./middleware/abTesting";
 
 const app = express();
+const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
 
 (async () => {
-    const { setupAuth } = await import("./auth.js");
+    const { setupAuth } = await import("./auth");
     setupAuth(app);
 
     await initRedis();
@@ -18,7 +20,9 @@ const app = express();
     const server = createServer(app);
     const wss = new WebSocketServer({ server });
     const canvas = new CanvasState();
+
     async function loadCanvas() {
+        if (!useRedis || !redis) return;
         const data = await redis.hGetAll("canvas:default:pixels");
         for (const field in data) {
             const pixel = JSON.parse(data[field]) as PixelUpdate;
@@ -29,11 +33,13 @@ const app = express();
     await loadCanvas();
 
     async function savePixel(update: PixelUpdate) {
+        if (!useRedis || !redis) return;
         const field = `${update.x}:${update.y}`;
         await redis.hSet("canvas:default:pixels", field, JSON.stringify(update));
     }
 
     async function clearCanvas() {
+        if (!useRedis || !redis) return;
         const keys = await redis.hKeys("canvas:default:pixels");
         if (keys.length) await redis.hDel("canvas:default:pixels", keys);
     }
@@ -57,9 +63,20 @@ const app = express();
                 switch (data.type) {
                     case "AUTH": {
                         const payload: any = jwt.decode(data.idToken);
-                        ws.userId =
-                            payload?.sub ?? `anon-${Math.random().toString(36).slice(2, 8)}`;
-                        ws.send(JSON.stringify({ type: "AUTH_ACK", userId: ws.userId }));
+                        ws.userId = data.analyticsId ||
+                            payload?.sub ||
+                            `anon-${Math.random().toString(36).slice(2, 8)}`;
+
+                        const variant = getAssignedVariant(ws.userId!, "pixel_size_test");
+                        if (variant) {
+                            logExposure(ws.userId!, "pixel_size_test", variant);
+                        }
+
+                        ws.send(JSON.stringify({
+                            type: "AUTH_ACK",
+                            userId: ws.userId,
+                            variant: variant
+                        }));
 
                         ws.send(JSON.stringify({ type: "SNAPSHOT", pixels: canvas.getAll() }));
                         break;
@@ -72,12 +89,38 @@ const app = express();
                         ws.send(JSON.stringify({ type: "Ack", opId: data.opId }));
 
                         if (applied) {
+                            const variant = getAssignedVariant(ws.userId, "pixel_size_test");
+                            if (variant) {
+                                logEvent(ws.userId, "pixel_placed", variant);
+                            }
+
                             await savePixel(update);
 
                             for (const client of wss.clients) {
                                 if (client !== ws && client.readyState === WebSocket.OPEN) {
                                     client.send(JSON.stringify({ type: "PixelUpdate", ...update }));
                                 }
+                            }
+                        }
+                        break;
+                    }
+                    case "BatchUpdate": {
+                        if (!ws.userId) return;
+
+                        const variant = getAssignedVariant(ws.userId, "pixel_size_test");
+
+                        for (const update of data.updates) {
+                            const fullUpdate = { ...update, userId: ws.userId };
+                            const applied = canvas.apply(fullUpdate);
+                            if (applied) {
+                                await savePixel(fullUpdate);
+                                if (variant) logEvent(ws.userId, "pixel_placed_batch", variant);
+                            }
+                        }
+
+                        for (const client of wss.clients) {
+                            if (client.readyState === WebSocket.OPEN) {
+                                client.send(JSON.stringify({ type: "BatchUpdate", updates: data.updates }));
                             }
                         }
                         break;

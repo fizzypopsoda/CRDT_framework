@@ -22,7 +22,8 @@ const colorPicker = document.getElementById("colorPicker") as HTMLInputElement;
 
 // State
 const canvas = new CanvasState();
-const localUserId = "local-" + Math.random().toString(36).slice(2);
+const localUserId = localStorage.getItem("analytics_id") || "user-" + crypto.randomUUID();
+localStorage.setItem("analytics_id", localUserId);
 let currentColor = localStorage.getItem(COLOR_KEY) || "#ff0000";
 const cursors = new Map<string, { x:number; y:number; color:string; ts:number }>();
 
