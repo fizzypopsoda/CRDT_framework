@@ -46,7 +46,7 @@ const redis_1 = require("./redis"); // ✅ NEW
 const app = (0, express_1.default)();
 const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
 (async () => {
-    const { setupAuth } = await Promise.resolve().then(() => __importStar(require("./auth.js")));
+    const { setupAuth } = await Promise.resolve().then(() => __importStar(require("./auth")));
     setupAuth(app);
     await (0, redis_1.initRedis)();
     const server = (0, http_1.createServer)(app);
@@ -76,9 +76,19 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
         if (keys.length)
             await redis_1.redis.hDel("canvas:default:pixels", keys);
     }
-    app.use(express_1.default.static(path_1.default.resolve(__dirname, "../public")));
-    app.get("/", (req, res) => {
-        res.sendFile(path_1.default.join(__dirname, "../public", "test-client.html"));
+    const publicPath = path_1.default.resolve(__dirname, __dirname.includes("dist") ? "../public" : "../../public");
+    app.use(express_1.default.static(publicPath));
+    app.get("/", (_req, res) => {
+        res.sendFile(path_1.default.join(publicPath, "test-client.html"));
+    });
+    app.get("/api/health", (_req, res) => {
+        res.json({ status: "ok", ts: Date.now() });
+    });
+    app.get("/api/stats", (_req, res) => {
+        const pixels = canvas.getAll();
+        const count = pixels.length;
+        const keys = new Set(pixels.map((p) => `${p.canvasId}:${p.x}:${p.y}`));
+        res.json({ pixelCount: count, uniqueKeys: keys.size, consistent: keys.size === count });
     });
     wss.on("connection", (ws) => {
         console.log("Client connected");
@@ -122,6 +132,26 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
                         for (const client of wss.clients) {
                             if (client.readyState === ws_1.WebSocket.OPEN) {
                                 client.send(JSON.stringify({ type: "BatchUpdate", updates: data.updates }));
+                            }
+                        }
+                        break;
+                    }
+                    case "PixelBatch": {
+                        if (!ws.userId || !Array.isArray(data.updates))
+                            return;
+                        for (const raw of data.updates) {
+                            const update = { ...raw, userId: ws.userId };
+                            const applied = canvas.apply(update);
+                            if (raw.opId) {
+                                ws.send(JSON.stringify({ type: "Ack", opId: raw.opId }));
+                            }
+                            if (applied) {
+                                await savePixel(update);
+                                for (const client of wss.clients) {
+                                    if (client !== ws && client.readyState === ws_1.WebSocket.OPEN) {
+                                        client.send(JSON.stringify({ type: "PixelUpdate", ...update }));
+                                    }
+                                }
                             }
                         }
                         break;

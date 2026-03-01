@@ -10,7 +10,7 @@ function setupAuth(app) {
     const CAS_BASE = "https://secure.its.yale.edu/cas";
     const SERVICE_URL = process.env.SERVICE_URL ||
         "https://crdt-framework.onrender.com/login";
-    const AUTH_MODE = process.env.AUTH_MODE || "cas";
+    const AUTH_MODE = process.env.AUTH_MODE ?? "disabled";
     app.use((0, express_session_1.default)({
         secret: process.env.SESSION_SECRET || "temporary-secret",
         resave: false,

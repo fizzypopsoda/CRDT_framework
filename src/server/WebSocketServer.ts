@@ -44,9 +44,16 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
         if (keys.length) await redis.hDel("canvas:default:pixels", keys);
     }
 
-    app.use(express.static(path.resolve(__dirname, "../public")));
-    app.get("/", (req, res) => {
-        res.sendFile(path.join(__dirname, "../public", "test-client.html"));
+    // Serve static client files
+    // - In dev (__dirname is src/server) -> public is at ../../public
+    // - In prod (__dirname is dist/server) -> public is at ../public (copied by build)
+    const publicPath = path.resolve(
+        __dirname,
+        __dirname.includes("dist") ? "../public" : "../../public"
+    );
+    app.use(express.static(publicPath));
+    app.get("/", (_req, res) => {
+        res.sendFile(path.join(publicPath, "test-client.html"));
     });
 
     app.get("/api/health", (_req, res) => {
@@ -135,6 +142,32 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
                         for (const client of wss.clients) {
                             if (client.readyState === WebSocket.OPEN) {
                                 client.send(JSON.stringify({ type: "BatchUpdate", updates: data.updates }));
+                            }
+                        }
+                        break;
+                    }
+
+                    case "PixelBatch": {
+                        if (!ws.userId || !Array.isArray(data.updates)) return;
+
+                        for (const raw of data.updates as PixelUpdate[]) {
+                            const update: PixelUpdate = { ...raw, userId: ws.userId };
+                            const applied = canvas.apply(update);
+
+                            // Optional: Ack per operation
+                            if ((raw as any).opId) {
+                                ws.send(JSON.stringify({ type: "Ack", opId: (raw as any).opId }));
+                            }
+
+                            if (applied) {
+                                await savePixel(update);
+                                for (const client of wss.clients) {
+                                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                                        client.send(
+                                            JSON.stringify({ type: "PixelUpdate", ...update })
+                                        );
+                                    }
+                                }
                             }
                         }
                         break;
