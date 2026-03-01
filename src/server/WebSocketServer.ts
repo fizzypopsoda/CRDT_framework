@@ -49,6 +49,20 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
         res.sendFile(path.join(__dirname, "../public", "test-client.html"));
     });
 
+    app.get("/api/health", (_req, res) => {
+        res.json({ status: "ok", ts: Date.now() });
+    });
+    app.get("/api/stats", (_req, res) => {
+        const pixels = canvas.getAll();
+        const count = pixels.length;
+        const keys = new Set(pixels.map((p) => `${p.canvasId}:${p.x}:${p.y}`));
+        res.json({
+            pixelCount: count,
+            uniqueKeys: keys.size,
+            consistent: keys.size === count,
+        });
+    });
+
     interface AuthedSocket extends WebSocket {
         userId?: string;
     }
