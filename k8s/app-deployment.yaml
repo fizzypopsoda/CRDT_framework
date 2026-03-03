@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+  labels:
+    app: crdt-app
+    version: stable
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: crdt-app
+      version: stable
+  template:
+    metadata:
+      labels:
+        app: crdt-app
+        version: stable
+    spec:
+      containers:
+        - name: app
+          image: crdt-app:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: AUTH_MODE
+              value: "disabled"
+            - name: USE_REDIS
+              value: "false"
+            - name: ANALYTICS_SERVICE_URL
+              value: "http://analytics-service:3001"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15

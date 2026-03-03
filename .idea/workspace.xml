@@ -5,7 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5cfc421f-39ad-4776-b40f-41f5f78bcbbd" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Milestones.md" beforeDir="false" afterPath="$PROJECT_DIR$/Milestones.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dist/client/main.js" beforeDir="false" afterPath="$PROJECT_DIR$/dist/client/main.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dist/public/test-client.html" beforeDir="false" afterPath="$PROJECT_DIR$/dist/public/test-client.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dist/server/WebSocketServer.js" beforeDir="false" afterPath="$PROJECT_DIR$/dist/server/WebSocketServer.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dist/server/auth.js" beforeDir="false" afterPath="$PROJECT_DIR$/dist/server/auth.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/server/WebSocketServer.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/server/WebSocketServer.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />

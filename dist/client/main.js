@@ -16,11 +16,11 @@ const overlayElem = document.getElementById("overlay");
 const ctx = canvasElem.getContext("2d");
 const octx = overlayElem.getContext("2d");
 const colorPicker = document.getElementById("colorPicker");
-const modeLabel = document.getElementById("modeLabel");
 const modeToggle = document.getElementById("modeToggle");
 // State
 const canvas = new CanvasState_1.CanvasState();
-const localUserId = "local-" + Math.random().toString(36).slice(2);
+const localUserId = localStorage.getItem("analytics_id") || "user-" + crypto.randomUUID();
+localStorage.setItem("analytics_id", localUserId);
 let currentColor = localStorage.getItem(COLOR_KEY) || "#ff0000";
 let batchingEnabled = true;
 const cursors = new Map();
@@ -30,9 +30,11 @@ colorPicker.addEventListener("input", () => {
     localStorage.setItem(COLOR_KEY, currentColor);
 });
 function updateModeUI() {
-    if (!modeLabel)
+    if (!modeToggle)
         return;
-    modeLabel.textContent = batchingEnabled ? "MODE: BATCHED" : "MODE: PER-PIXEL";
+    modeToggle.textContent = batchingEnabled ? "MODE: BATCHED" : "MODE: PER-PIXEL";
+    modeToggle.classList.toggle("mode-toggle-batched", batchingEnabled);
+    modeToggle.classList.toggle("mode-toggle-perpixel", !batchingEnabled);
 }
 modeToggle?.addEventListener("click", () => {
     batchingEnabled = !batchingEnabled;

@@ -2,6 +2,17 @@
 import { CanvasState } from "../crdt/CanvasState";
 import { PixelUpdate } from "../crdt/types";
 
+function randomId(): string {
+  if (typeof crypto !== "undefined" && typeof (crypto as any).randomUUID === "function") return (crypto as any).randomUUID();
+  const bytes = new Uint8Array(16);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(bytes);
+  else for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+  (bytes[6] as number) = ((bytes[6] as number) & 0x0f) | 0x40;
+  (bytes[8] as number) = ((bytes[8] as number) & 0x3f) | 0x80;
+  const hex = Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 const GRID = 100;
 const PIXEL_SIZE = 14;
 const LOCAL_KEY = "localCanvasState";
@@ -23,7 +34,7 @@ const modeToggle = document.getElementById("modeToggle") as HTMLButtonElement | 
 
 // State
 const canvas = new CanvasState();
-const localUserId = localStorage.getItem("analytics_id") || "user-" + crypto.randomUUID();
+const localUserId = localStorage.getItem("analytics_id") || "user-" + randomId();
 localStorage.setItem("analytics_id", localUserId);
 let currentColor = localStorage.getItem(COLOR_KEY) || "#ff0000";
 let batchingEnabled = true;
@@ -149,7 +160,7 @@ window.addEventListener("pointerup", () => {
 function paintAt(gx: number, gy: number) {
     const update: PixelUpdate = {
         canvasId: "default", x: gx, y: gy, color: currentColor,
-        ts: Date.now(), userId: localUserId, opId: crypto.randomUUID(),
+        ts: Date.now(), userId: localUserId, opId: randomId(),
     };
     applyAndPersist(update);
     sendUpdate(update);

@@ -1,0 +1,1 @@
+{"experiments":[{"id":"pixel_size_test","variants":["standard","large"],"weights":[0.5,0.5],"active":true}]}

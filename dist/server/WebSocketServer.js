@@ -42,7 +42,8 @@ const ws_1 = require("ws");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const CanvasState_1 = require("../crdt/CanvasState");
 const path_1 = __importDefault(require("path"));
-const redis_1 = require("./redis"); // ✅ NEW
+const redis_1 = require("./redis");
+const analyticsClient_1 = require("./analyticsClient");
 const app = (0, express_1.default)();
 const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
 (async () => {
@@ -76,6 +77,9 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
         if (keys.length)
             await redis_1.redis.hDel("canvas:default:pixels", keys);
     }
+    // Serve static client files
+    // - In dev (__dirname is src/server) -> public is at ../../public
+    // - In prod (__dirname is dist/server) -> public is at ../public (copied by build)
     const publicPath = path_1.default.resolve(__dirname, __dirname.includes("dist") ? "../public" : "../../public");
     app.use(express_1.default.static(publicPath));
     app.get("/", (_req, res) => {
@@ -88,7 +92,11 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
         const pixels = canvas.getAll();
         const count = pixels.length;
         const keys = new Set(pixels.map((p) => `${p.canvasId}:${p.x}:${p.y}`));
-        res.json({ pixelCount: count, uniqueKeys: keys.size, consistent: keys.size === count });
+        res.json({
+            pixelCount: count,
+            uniqueKeys: keys.size,
+            consistent: keys.size === count,
+        });
     });
     wss.on("connection", (ws) => {
         console.log("Client connected");
@@ -98,9 +106,18 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
                 switch (data.type) {
                     case "AUTH": {
                         const payload = jsonwebtoken_1.default.decode(data.idToken);
-                        ws.userId =
-                            payload?.sub ?? `anon-${Math.random().toString(36).slice(2, 8)}`;
-                        ws.send(JSON.stringify({ type: "AUTH_ACK", userId: ws.userId }));
+                        ws.userId = data.analyticsId ||
+                            payload?.sub ||
+                            `anon-${Math.random().toString(36).slice(2, 8)}`;
+                        const variant = await (0, analyticsClient_1.getAssignedVariant)(ws.userId, "pixel_size_test");
+                        if (variant) {
+                            (0, analyticsClient_1.logExposure)(ws.userId, "pixel_size_test", variant);
+                        }
+                        ws.send(JSON.stringify({
+                            type: "AUTH_ACK",
+                            userId: ws.userId,
+                            variant: variant
+                        }));
                         ws.send(JSON.stringify({ type: "SNAPSHOT", pixels: canvas.getAll() }));
                         break;
                     }
@@ -111,6 +128,10 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
                         const applied = canvas.apply(update);
                         ws.send(JSON.stringify({ type: "Ack", opId: data.opId }));
                         if (applied) {
+                            const variant = await (0, analyticsClient_1.getAssignedVariant)(ws.userId, "pixel_size_test");
+                            if (variant) {
+                                (0, analyticsClient_1.logEvent)(ws.userId, "pixel_placed", variant);
+                            }
                             await savePixel(update);
                             for (const client of wss.clients) {
                                 if (client !== ws && client.readyState === ws_1.WebSocket.OPEN) {
@@ -123,11 +144,15 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
                     case "BatchUpdate": {
                         if (!ws.userId)
                             return;
+                        const variant = await (0, analyticsClient_1.getAssignedVariant)(ws.userId, "pixel_size_test");
                         for (const update of data.updates) {
                             const fullUpdate = { ...update, userId: ws.userId };
                             const applied = canvas.apply(fullUpdate);
-                            if (applied)
+                            if (applied) {
                                 await savePixel(fullUpdate);
+                                if (variant)
+                                    (0, analyticsClient_1.logEvent)(ws.userId, "pixel_placed_batch", variant);
+                            }
                         }
                         for (const client of wss.clients) {
                             if (client.readyState === ws_1.WebSocket.OPEN) {
@@ -142,6 +167,7 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
                         for (const raw of data.updates) {
                             const update = { ...raw, userId: ws.userId };
                             const applied = canvas.apply(update);
+                            // Optional: Ack per operation
                             if (raw.opId) {
                                 ws.send(JSON.stringify({ type: "Ack", opId: raw.opId }));
                             }

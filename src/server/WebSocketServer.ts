@@ -6,7 +6,7 @@ import { CanvasState } from "../crdt/CanvasState";
 import { PixelUpdate } from "../crdt/types";
 import path from "path";
 import { initRedis, redis } from "./redis";
-import { getAssignedVariant, logExposure, logEvent } from "./middleware/abTesting";
+import { getAssignedVariant, logExposure, logEvent } from "./analyticsClient";
 
 const app = express();
 const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
@@ -88,7 +88,7 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
                             payload?.sub ||
                             `anon-${Math.random().toString(36).slice(2, 8)}`;
 
-                        const variant = getAssignedVariant(ws.userId!, "pixel_size_test");
+                        const variant = await getAssignedVariant(ws.userId!, "pixel_size_test");
                         if (variant) {
                             logExposure(ws.userId!, "pixel_size_test", variant);
                         }
@@ -110,7 +110,7 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
                         ws.send(JSON.stringify({ type: "Ack", opId: data.opId }));
 
                         if (applied) {
-                            const variant = getAssignedVariant(ws.userId, "pixel_size_test");
+                            const variant = await getAssignedVariant(ws.userId, "pixel_size_test");
                             if (variant) {
                                 logEvent(ws.userId, "pixel_placed", variant);
                             }
@@ -128,7 +128,7 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
                     case "BatchUpdate": {
                         if (!ws.userId) return;
 
-                        const variant = getAssignedVariant(ws.userId, "pixel_size_test");
+                        const variant = await getAssignedVariant(ws.userId, "pixel_size_test");
 
                         for (const update of data.updates) {
                             const fullUpdate = { ...update, userId: ws.userId };
