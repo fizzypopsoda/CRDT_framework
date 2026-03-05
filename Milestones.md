@@ -34,7 +34,28 @@ are correctly attributed to the assigned variant across multiple interactions.
 
 # Milestone 2 – Concurrency
 
-Summary: Stress testing with k6 and Artillery; WebSocket and HTTP /api/health, /api/stats; async refactor of savePixel/clearCanvas
+## 1. Implementation overview
+
+- **Stress testing:** k6 scripts in `tests/` exercise WebSocket connections and pixel updates ( `tests/loadtest.js` with staged load). 
+- **HTTP endpoints for load tests:** `GET /api/health` and `GET /api/stats` are implemented in `src/server/WebSocketServer.ts` so load tools can hit a simple HTTP API.
+- **Async refactor:** `savePixel()` and `clearCanvas()` in `WebSocketServer.ts` are async and run without blocking the WebSocket loop (fire-and-forget or awaited where ordering matters), so concurrent pixel updates and clears are handled safely.
+
+## 2. Where to find it
+
+k6 WebSocket load test -> `tests/loadtest.js` 
+Run multiple k6 runs / average results -> `tests/run_multiple.js`, `tests/average_results.js` 
+HTTP /api/health, /api/stats -> `src/server/WebSocketServer.ts` (Express routes)
+savePixel / clearCanvas (async) -> `src/server/WebSocketServer.ts`
+
+## 3. Commands
+
+```bash
+npm run loadtest
+# or: npm run loadtest:concurrent
+```
+
+Start the server  (`npm run dev`) before running load tests
+
 ---
 
 # Milestone 3 – Containers
