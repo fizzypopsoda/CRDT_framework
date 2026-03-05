@@ -34,8 +34,7 @@ are correctly attributed to the assigned variant across multiple interactions.
 
 # Milestone 2 – Concurrency
 
-(Summary: Stress testing with k6 and Artillery; WebSocket and HTTP /api/health, /api/stats; async refactor of savePixel/clearCanvas; results and mitigations documented in prior revision.)
-
+Summary: Stress testing with k6 and Artillery; WebSocket and HTTP /api/health, /api/stats; async refactor of savePixel/clearCanvas
 ---
 
 # Milestone 3 – Containers
@@ -45,41 +44,76 @@ are correctly attributed to the assigned variant across multiple interactions.
 The backend is split into two services:
 
 1. **CRDT App (main application)** – WebSocket + HTTP server: canvas, auth, pixel/batch updates, Redis persistence, and `/api/health`, `/api/stats`. It calls the Analytics service over HTTP when `ANALYTICS_SERVICE_URL` is set.
-2. **Analytics service** – Standalone HTTP API implementing the Milestone 1 A/B testing logic: variant assignment, exposure logging, event logging. Used as the second, well-defined service for the assignment.
+2. **Analytics service** – Standalone HTTP API implementing the Milestone 1 A/B testing logic: variant assignment, exposure logging, event logging.
 
-## 2. Code Changes
 
-- **`services/analytics/`** – New service:
-  - `server.js`: Express app with `GET /health`, `GET /variant?userId=&experimentId=`, `POST /exposure`, `POST /event`. Same logic as `abTesting.ts` (MD5 bucketing, tests.json).
-  - `package.json`, `Dockerfile`, `tests.json` (copy of root experiments config).
-- **`src/server/analyticsClient.ts`** – New module: when `ANALYTICS_SERVICE_URL` is set, calls the Analytics service over HTTP; otherwise falls back to in-process `abTesting` so local dev works without the service.
-- **`src/server/WebSocketServer.ts`** – Switched to `analyticsClient` (async `getAssignedVariant`, `logExposure`, `logEvent`). AUTH and pixel flows now await or call the client; behavior unchanged when Analytics is unavailable (fallback).
-- **`Dockerfile`** (repo root) – Multi-stage build for the main app: build with Node, then production image running `node dist/server/WebSocketServer.js`.
-- **`services/analytics/Dockerfile`** – Single-stage image for the Analytics service.
-- **`.dockerignore`** – Excludes `node_modules`, `dist`, `.git`, etc., from build context.
-- **`k8s/`** – Kubernetes manifests for Minikube:
-  - `analytics-deployment.yaml`, `analytics-service.yaml`
-  - `app-deployment.yaml`, `app-service.yaml` (env `ANALYTICS_SERVICE_URL=http://analytics-service:3001`)
-  - `app-canary-deployment.yaml`, `app-canary-service.yaml` (canary app image)
-  - `ingress.yaml`: main Ingress for app; canary Ingress with `nginx.ingress.kubernetes.io/canary: "true"` and `canary-weight: "20"` for 20% traffic to canary.
-- **`k8s/README.md`** – Build, load, and deploy steps for Minikube.
-
-## 3. Container Build and Orchestration
+## 2. Container Build and Orchestration
 
 - **Containers:** Two images: `crdt-app` (main), `crdt-analytics` (Analytics). Built with Docker; for Minikube, images are built locally and loaded via `eval $(minikube docker-env)` then `docker build ...`.
 - **Orchestration:** Kubernetes (Minikube). Deploy order: Analytics Deployment + Service, then App Deployment + Service, then Ingress. Canary: deploy canary Deployment + Service and apply canary Ingress so Nginx Ingress splits traffic (80% stable, 20% canary by weight).
 
-## 4. Canary Releases
+## 3. Canary Releases
 
 - **Mechanism:** Nginx Ingress canary annotations. Main Ingress backs `app-service` (stable). Second Ingress has `canary: "true"` and `canary-weight: "20"`, backing `app-canary-service`. Same host (`crdt.local`); Nginx sends ~20% of requests to the canary.
 - **Usage:** Build canary image (e.g. `crdt-app:canary`), deploy `app-canary-deployment.yaml` and `app-canary-service.yaml`, apply canary Ingress. Adjust weight or remove canary Ingress to roll back.
 
-## 5. How to Run
+## 4. How to Run
 
 - **Local (no containers):** `AUTH_MODE=disabled npm run dev` (app uses in-process analytics). Optional: run Analytics service with `cd services/analytics && npm install && PORT=3001 node server.js`, then `ANALYTICS_SERVICE_URL=http://localhost:3001 npm run dev`.
 - **Minikube:** See `k8s/README.md`. In short: `minikube start`, `minikube addons enable ingress`, build and load both images, `kubectl apply -f k8s/...`, add `crdt.local` to hosts pointing at `minikube ip`.
 
-## 6. Challenges
+---
 
-- **Analytics service URL:** Main app must know the Analytics URL in Kubernetes. Set via env `ANALYTICS_SERVICE_URL=http://analytics-service:3001` in the app Deployment(s). No service discovery beyond K8s DNS.
-- **Canary image:** Canary and stable use the same or different image tags (`crdt-app:latest` vs `crdt-app:canary`). For a real canary, build a new image with code changes and tag as `canary`; deploy canary Deployment with that image.
+# Milestone 4 - Chaos Engineering
+
+We use **Chaos Mesh** on Minikube for two experiments: pod kill (recovery from unexpected failures) and network latency (slow connections between app and analytics).
+
+## 1. Deployment configuration (recovery from failures)
+
+Deployment files used for these experiments (and for normal runs) are in `k8s/`:
+
+- **`k8s/app-deployment.yaml`** – Main app: `replicas: 2`, `livenessProbe` on `/api/health`, default `restartPolicy: Always`. When a pod is killed, the Deployment controller starts a new pod so the system recovers.
+- **`k8s/analytics-deployment.yaml`** – Analytics: `replicas: 1`, `livenessProbe` on `/health`, default `restartPolicy: Always`. Same recovery behavior.
+
+No deployment changes were required for the pod-kill experiment; if a pod had not been restarted, we would add or tighten `livenessProbe` and ensure `restartPolicy: Always` explicitly.
+
+## 2. Chaos framework and experiment configs
+
+- **Framework:** Chaos Mesh (https://chaos-mesh.org), installed via Helm in the `chaos-mesh` namespace.
+- **Experiment manifests:** `k8s/chaos/pod-kill-experiment.yaml`, `k8s/chaos/network-delay-experiment.yaml`. Full install and run instructions: `k8s/chaos/README.md`.
+
+**Experiment 1 – Pod kill:** `PodChaos` with `action: pod-kill`, `mode: one`, selector `app: crdt-app`. It kills one main-app pod so we can verify Kubernetes restarts it.
+
+**Experiment 2 – Network latency:** `NetworkChaos` with `action: delay`, `latency: "500ms"`, selector `app: analytics`, `duration: "5m"`. Injects 500ms delay to traffic involving the analytics pods so app → analytics calls are slow.
+
+## 3. Commands executed
+
+**Install Chaos Mesh (once):**
+
+```bash
+helm repo add chaos-mesh https://charts.chaos-mesh.org
+helm install chaos-mesh chaos-mesh/chaos-mesh --namespace=chaos-mesh --create-namespace
+kubectl get pods -n chaos-mesh
+```
+
+**Experiment 1 – Pod kill:**
+
+```bash
+kubectl get pods -l app=crdt-app
+kubectl apply -f k8s/chaos/pod-kill-experiment.yaml
+kubectl get pods -l app=crdt-app -w
+kubectl delete -f k8s/chaos/pod-kill-experiment.yaml
+```
+
+**Experiment 2 – Network latency:**
+
+```bash
+kubectl apply -f k8s/chaos/network-delay-experiment.yaml
+# Use the app (e.g. http://crdt.local); analytics calls will be delayed ~500ms
+kubectl delete -f k8s/chaos/network-delay-experiment.yaml
+```
+
+## 4. Findings
+
+- **Pod kill:** Kubernetes restarts the killed `crdt-app` pod automatically (we observed a canary pod killed and a new one created). Replica count is restored. No deployment changes were needed.
+- **Network latency:** With 500ms delay on analytics, the app still functions. Measured with `curl` from inside the cluster to `http://analytics-service:3001/health`: **~1.5s** with the experiment active vs **~0.01s** without. A/B and event calls to analytics are slower but no timeouts or errors
