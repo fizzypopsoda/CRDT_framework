@@ -21,5 +21,13 @@ async function initRedis() {
         console.error("Redis connection failed:", err);
         console.warn("Continuing without Redis (in-memory mode)");
         connected = false;
+        try {
+            if (exports.redis)
+                await exports.redis.disconnect();
+        }
+        catch {
+            /* ignore */
+        }
+        exports.redis = null;
     }
 }
