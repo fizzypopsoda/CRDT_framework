@@ -8,6 +8,7 @@
     "build": "tsc && mkdir -p dist/public && cp -r src/public/* dist/public/",
     "start": "node dist/server/WebSocketServer.js",
     "dev": "tsx src/server/WebSocketServer.ts",
+    "test": "jest --roots tests",
     "loadtest": "k6 run tests/loadtest.js",
     "loadtest:concurrent": "k6 run tests/loadtest_concurrent.js"
   },
