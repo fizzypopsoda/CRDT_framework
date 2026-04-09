@@ -1,22 +1,29 @@
-# Homework Assignment 2 — Vector database
-
----
-
-**Commands:**
-
-1. **Add** — encode and store a piece of text.  
-2. **Query** — return the k most similar stored texts for a query string.
+# Homework 2 — Vector database
 
 ---
 
 ## Prerequisites
 
 - **Node.js 18+**
-- **npm** 
+- **npm** (ships with Node)
 
 ---
 
-## Install and build
+## Obtaining dependencies
+
+Dependencies are declared in `package.json` and locked in `package-lock.json`. They are not included in a submission zip.
+
+After unzipping, from this directory run:
+
+```bash
+npm install
+```
+
+That downloads TypeScript, Jest,ts-jest, and @types/ packages from the public npm registry. No separate downloads, API keys, or model files are required.
+
+---
+
+## Install, build, and test (local)
 
 ```bash
 cd hw2-vector-db
@@ -24,6 +31,9 @@ npm install
 npm run build
 npm test
 ```
+
+- `npm run build` compiles `src/*.ts` → `dist/` via `tsc`.
+- `npm test` runs Jest tests in `tests/`.
 
 ---
 
