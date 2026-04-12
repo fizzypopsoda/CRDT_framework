@@ -138,3 +138,7 @@ kubectl delete -f k8s/chaos/network-delay-experiment.yaml
 
 - **Pod kill:** Kubernetes restarts the killed `crdt-app` pod automatically (we observed a canary pod killed and a new one created). Replica count is restored. No deployment changes were needed.
 - **Network latency:** With 500ms delay on analytics, the app still functions. Measured with `curl` from inside the cluster to `http://analytics-service:3001/health`: **~1.5s** with the experiment active vs **~0.01s** without. A/B and event calls to analytics are slower but no timeouts or errors
+
+
+
+- Testing PR summary capability.... added this line to readme
