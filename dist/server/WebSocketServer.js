@@ -46,6 +46,8 @@ const redis_1 = require("./redis");
 const analyticsClient_1 = require("./analyticsClient");
 const app = (0, express_1.default)();
 const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
+/** Updated on every inbound WebSocket message (any type); exposed on GET /api/ping. */
+let lastWsMessageAt = null;
 (async () => {
     const { setupAuth } = await Promise.resolve().then(() => __importStar(require("./auth")));
     setupAuth(app);
@@ -77,10 +79,8 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
         if (keys.length)
             await redis_1.redis.hDel("canvas:default:pixels", keys);
     }
-    // Serve static client files
-    // - In dev (__dirname is src/server) -> public is at ../../public
-    // - In prod (__dirname is dist/server) -> public is at ../public (copied by build)
-    const publicPath = path_1.default.resolve(__dirname, __dirname.includes("dist") ? "../public" : "../../public");
+    // Serve static client files (always ../public relative to this file: src/public or dist/public)
+    const publicPath = path_1.default.resolve(__dirname, "../public");
     app.use(express_1.default.static(publicPath));
     app.get("/", (_req, res) => {
         res.sendFile(path_1.default.join(publicPath, "test-client.html"));
@@ -98,11 +98,15 @@ const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
             consistent: keys.size === count,
         });
     });
+    app.get("/api/ping", (_req, res) => {
+        res.json({ ok: true, ts: Date.now(), lastWsMessageAt });
+    });
     wss.on("connection", (ws) => {
         console.log("Client connected");
         ws.on("message", async (msg) => {
             try {
                 const data = JSON.parse(msg.toString());
+                lastWsMessageAt = Date.now();
                 switch (data.type) {
                     case "AUTH": {
                         const payload = jsonwebtoken_1.default.decode(data.idToken);

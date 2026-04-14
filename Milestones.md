@@ -139,6 +139,109 @@ kubectl delete -f k8s/chaos/network-delay-experiment.yaml
 - **Pod kill:** Kubernetes restarts the killed `crdt-app` pod automatically (we observed a canary pod killed and a new one created). Replica count is restored. No deployment changes were needed.
 - **Network latency:** With 500ms delay on analytics, the app still functions. Measured with `curl` from inside the cluster to `http://analytics-service:3001/health`: **~1.5s** with the experiment active vs **~0.01s** without. A/B and event calls to analytics are slower but no timeouts or errors
 
-
-
 - Testing PR summary capability.... added this line to readme
+
+
+Milestone 5:
+
+Output from Aider:
+"Okay, let's see. The user provided a git diff and a request to summarize a PR. They want me to look at the changes in   
+the diff and figure out what's going on.                                                                                
+
+First, the deleted .DS_Store files. Those are macOS temporary files, so removing them is standard. The new .gitignore   
+entry for .DS_Store makes sense to prevent them from being tracked in the future. That's good repo hygiene.             
+
+Then there's the hw2-vector-db.zip added as a binary. Since it's a zip file, I can't see the contents here. The user    
+might need to check if this zip is necessary or if it's a large file that should be ignored. But the .gitignore already 
+has .DS_Store, so maybe the zip is intentional.                                                                         
+
+In Milestones.md, a line was added about testing PR summary capability. The rest of the file seems to have some         
+Kubernetes-related notes. The user added a line at the end, but there's a "No newline at end of file" warning. That's a 
+minor issue, but fixing it would be good practice.                                                                      
+
+The PR summary mentions checking for intent, repo hygiene, binary diffs, and things to verify. The user wants a summary 
+of these aspects. The binary diffs (like the zip and .DS_Store) don't show content changes, so they might be harmless   
+but need checking. The .gitignore addition is positive. The Milestones.md edit is minor but could be a placeholder for  
+future notes.                                                                                                           
+
+I need to make sure I don't suggest any changes unless the user asks. The user's main request is to summarize the PR    
+based on the diff. So I should outline the intent (adding the zip, cleaning up .DS_Store), repo hygiene (new .gitignore 
+entry, zip file), what the binary diffs hide (can't see contents of zip), and what to verify manually (like the zip's   
+necessity and the Milestones line's purpose).                                                                           
+
+
+ 1 Intent:                                                                                                              
+    • The PR adds a binary zip file (hw2-vector-db.zip) and cleans up .DS_Store files (macOS metadata).                 
+    • A new line was added to Milestones.md for testing PR summary capability.                                          
+    • A .gitignore file was created to exclude .DS_Store files.                                                         
+ 2 Repo Hygiene / Risks:                                                                                                
+    • ✅ .DS_Store files are removed, and .gitignore now blocks future tracking of these files.                         
+    • ⚠️ hw2-vector-db.zip is a binary blob. Large binary files in repos can bloat the history and are generally        
+      discouraged unless necessary. Verify if this zip is required or if it should be replaced with a source folder     
+      (e.g., hw2-vector-db/) and added to .gitignore.                                                                   
+    • ⚠️ The line +Testing PR summary capability.... added this line to readme in Milestones.md appears to be a         
+      placeholder/test. Confirm if this is intentional or a draft note.                                                 
+ 3 What Binary Diffs Hide:                                                                                              
+    • The hw2-vector-db.zip binary diff does not show its contents. Verify:                                             
+       • Is this zip file necessary for the project?                                                                    
+       • Does it contain source code, assets, or something else?                                                        
+       • Should it be replaced with source files and tracked via version control (if applicable)?                       
+ 4 What to Verify Manually:                                                                                             
+    • Confirm the purpose of the hw2-vector-db.zip file.                                                                
+    • Check if the .DS_Store files were removed from all relevant directories.                                          
+    • Validate that the .gitignore entry for .DS_Store is sufficient for the project's needs.                           
+    • Review the added line in Milestones.md to ensure it aligns with the project's documentation goals.                
+
+No files need immediate changes unless further clarification is provided."
+
+I would say it made the reviewing process easier and it covered crucial changes.
+
+Feedback on Aider:
+
+We used Aider CLI from the project root with `groq/qwen/qwen3-32b`, `GROQ_API_KEY` exported in the same terminal, and `--map-tokens 0` after hitting Groq TPM errors on larger maps.
+
+Task: Add module-level `lastWsMessageAt`, set it on each WebSocket message, add `GET /api/ping` returning `{ ok, ts, lastWsMessageAt }`, without removing existing `wss.on("connection")` or `switch (data.type)` cases.
+
+What worked: The model’s step-by-step plan matched the intended design (where to put the variable, when to update the timestamp, where to register the route).
+
+What did not:
+Groq often rate-limited when the combined context was still too large. 
+Replies repeatedly hit an output token cap (2k), so diffs were truncated. Even with an explicit “additive only” instruction, the emitted diff removed the entire WebSocket message handler and replaced it with `/api/ping`-that patch would have broken the app, so I did not apply it and confirmed with `git diff` / `npm run build`.
+
+I added `GET /api/ping` myself; `lastWsMessageAt` and the per-message update were already present in `WebSocketServer.ts` after earlier edits.
+
+Aider is useful for structuring a change, but with Groq + default output limits it was unreliable for large files: truncated outputs and unsafe hunks required careful review. For this project I would split work into smaller files/prompts or use a higher output limit / different model if available..
+
+ Playwright and LLM browser helper
+
+## 1. What this adds
+
+Playwright runs a couple of smoke checks against the real pixel canvas (page loads, canvas and mode toggle visible, `/api/health` returns JSON). Separately, a small Node script opens the site in Chromium, sends a short text snapshot of the page to Groq, gets back a JSON plan (click, wait, goto same-origin, or done), runs that plan in a loop, then asks the model for a one-line summary.
+
+The E2E config starts its own dev server on port 4173 with `AUTH_MODE=disabled` so tests do not attach to whatever I might already have on 8080 with CAS on—that was producing a useless browser title of "Error" because `/` never reached our HTML. To reuse an existing server, set `PLAYWRIGHT_REUSE_SERVER=1` and point `PLAYWRIGHT_BASE_URL` / `PLAYWRIGHT_PORT` at it.
+
+- `playwright.config.js` — base URL, webServer wait on `/api/health`, Chromium project.
+- `tests/e2e/canvas-smoke.spec.js` — Playwright specs only (Jest stays in `tests/*.test.ts`).
+- `scripts/llm-browser-assistant.mjs` — browser loop; reuses `scripts/llm-providers.mjs`.
+- `package.json` — `test:e2e`, `test:e2e:install`, `test:e2e:ci`, `llm-assistant`.
+- `.gitignore` — playwright-report, test-results, blob-report.
+
+First time on a machine: `npm run test:e2e:install` (or `npx playwright install`)
+
+## 3. Commands
+
+```bash
+npm run test:e2e:install
+npm run test:e2e
+npm run test:e2e:ci
+
+export GROQ_API_KEY=...
+npm run llm-assistant -- 'click #modeToggle once then stop'
+```
+
+If the app is only on 4173, export `LLM_ASSISTANT_BASE_URL=http://127.0.0.1:4173` before `npm run llm-assistant`.
+
+## 4. Findings
+
+The model sometimes returns invalid JSON or a selector that is not on the page; the script logs it and continues, and bad clicks do not kill the run. Groq TPM behaves like it did with Aider—short goals and a low `LLM_ASSISTANT_STEPS` help. We also fixed static paths for `tsx` dev (`../public` from `src/server`) so `test-client.html` is found; before that, `sendFile` hit ENOENT and the UI test saw an error page.
+

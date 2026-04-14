@@ -1,1 +1,17 @@
 .DS_Store
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+.aider*
+.env
+.env
+.env
+.env
+.env
+.env
+.env
+.env
+.env
+.env
+.env
