@@ -44,6 +44,7 @@ const CanvasState_1 = require("../crdt/CanvasState");
 const path_1 = __importDefault(require("path"));
 const redis_1 = require("./redis");
 const analyticsClient_1 = require("./analyticsClient");
+const genaiEval_1 = require("./genaiEval");
 const app = (0, express_1.default)();
 const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
 /** Updated on every inbound WebSocket message (any type); exposed on GET /api/ping. */
@@ -51,6 +52,8 @@ let lastWsMessageAt = null;
 (async () => {
     const { setupAuth } = await Promise.resolve().then(() => __importStar(require("./auth")));
     setupAuth(app);
+    app.use(express_1.default.json({ limit: "512kb" }));
+    (0, genaiEval_1.registerGenaiEvalRoutes)(app);
     await (0, redis_1.initRedis)();
     const server = (0, http_1.createServer)(app);
     const wss = new ws_1.WebSocketServer({ server });
@@ -79,7 +82,6 @@ let lastWsMessageAt = null;
         if (keys.length)
             await redis_1.redis.hDel("canvas:default:pixels", keys);
     }
-    // Serve static client files (always ../public relative to this file: src/public or dist/public)
     const publicPath = path_1.default.resolve(__dirname, "../public");
     app.use(express_1.default.static(publicPath));
     app.get("/", (_req, res) => {

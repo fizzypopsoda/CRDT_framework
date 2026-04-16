@@ -212,7 +212,7 @@ I added `GET /api/ping` myself; `lastWsMessageAt` and the per-message update wer
 
 Aider is useful for structuring a change, but with Groq + default output limits it was unreliable for large files: truncated outputs and unsafe hunks required careful review. For this project I would split work into smaller files/prompts or use a higher output limit / different model if available..
 
- Playwright and LLM browser helper
+# Playwright and LLM browser helper
 
 ## 1. What this adds
 
@@ -244,4 +244,62 @@ If the app is only on 4173, export `LLM_ASSISTANT_BASE_URL=http://127.0.0.1:4173
 ## 4. Findings
 
 The model sometimes returns invalid JSON or a selector that is not on the page; the script logs it and continues, and bad clicks do not kill the run. Groq TPM behaves like it did with Aider—short goals and a low `LLM_ASSISTANT_STEPS` help. We also fixed static paths for `tsx` dev (`../public` from `src/server`) so `test-client.html` is found; before that, `sendFile` hit ENOENT and the UI test saw an error page.
+
+---
+
+# Milestone 6
+
+## 1. GenAI feature and three approaches
+
+The feature is a small question-answering path over Groq, exposed as HTTP APIs so we can compare outputs. There are n = 3 fixed approaches, each with its own model and/or temperature and/or system prompt:
+
+- strict-qwen— `qwen/qwen3-32b`, low temperature, system text pushes short factual answers.
+- creative-qwen — same model, higher temperature, looser system text for more variety.
+- fast-llama — `llama-3.1-8b-instant`, mid temperature, system text forces very short replies.
+
+Code is in `src/server/genaiEval.ts` (routes registered from `WebSocketServer.ts`). We did not add LangChain; the three approaches are plain parameter sets plus `fetch` to Groq’s chat API, which keeps the stack small. The same file could be wrapped with LangChain chains later if we want templating and tracing.
+
+## 2. API behavior
+
+- `POST /api/genai` with JSON `{ "prompt": "..." }` returns one completion. Optional `"approach": "strict-qwen" | "creative-qwen" | "fast-llama"`; if omitted, the server round-robins a default among the three.
+- Same path with query `?dual=1` (or `dual=true`, or body `"dual": true`) returns two completions from two different approaches (rotates among three fixed pairs so comparisons vary).
+- `POST /api/genai/preference` with `{ "winner": "<approachId>", "loser": "<approachId>" }` does the same as sending `{ "preference": { "winner", "loser" } }` on `POST /api/genai` (single-endpoint variant for graders who want one URL).
+- `GET /api/genai/elo` returns current ELO-style ratings and a sorted ranking list.
+- `GET /api/genai/approaches` lists ids and metadata for clients.
+
+`express.json()` is enabled on the app before these routes (same server as the canvas).
+
+## 3. ELO scoring
+
+Each approach keeps a numeric rating (starts at 1500). On each preference, we apply the usual expected-score formula `E = 1 / (1 + 10^((R_opponent - R_self)/400))` and update `R' = R + K * (S - E)` with `K = 32`, `S=1` for the winner and `S=0` for the loser. Code is in `EloTracker` in `genaiEval.ts`;
+tests in `tests/genaiElo.test.ts` check symmetry, ordering intuition, and monotonicity after one update.
+
+Ratings are in-memory only (reset on server restart). Redis persistence would be an obvious next step. jest.config.js now ignores `tests/e2e/` so Playwright specs are not picked up by Jest.
+
+## 4. How to try it
+
+Needs `GROQ_API_KEY` (same as other Groq scripts). Server: `AUTH_MODE=disabled npm run dev`.
+
+```bash
+curl -s http://127.0.0.1:8080/api/genai/approaches | jq .
+
+curl -s -X POST http://127.0.0.1:8080/api/genai \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"What is a CRDT in one sentence?"}' | jq .
+
+curl -s -X POST "http://127.0.0.1:8080/api/genai?dual=1" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"Name one benefit of WebSockets for a shared canvas."}' | jq .
+
+curl -s -X POST http://127.0.0.1:8080/api/genai/preference \
+  -H "Content-Type: application/json" \
+  -d '{"winner":"strict-qwen","loser":"fast-llama"}' | jq .
+
+curl -s http://127.0.0.1:8080/api/genai/elo | jq .
+```
+
+## 5. Findings / challenges
+
+- Groq limits: Dual mode fires two model calls at once; under heavy TPM limits we may need to lower `max_tokens`.
+- No LangChain: Faster to ship and easier to read... tradeoff is no built-in prompt versioning—approaches are constants in one file.
 

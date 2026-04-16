@@ -7,16 +7,19 @@ import { PixelUpdate } from "../crdt/types";
 import path from "path";
 import { initRedis, redis } from "./redis";
 import { getAssignedVariant, logExposure, logEvent } from "./analyticsClient";
+import { registerGenaiEvalRoutes } from "./genaiEval";
 
 const app = express();
 const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
 
-/** Updated on every inbound WebSocket message (any type); exposed on GET /api/ping. */
 let lastWsMessageAt: number | null = null;
 
 (async () => {
     const { setupAuth } = await import("./auth");
     setupAuth(app);
+
+    app.use(express.json({ limit: "512kb" }));
+    registerGenaiEvalRoutes(app);
 
     await initRedis();
 
