@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.EloTracker = exports.APPROACH_IDS = void 0;
+exports.stripReasoningArtifacts = stripReasoningArtifacts;
 exports.expectedScore = expectedScore;
 exports.registerGenaiEvalRoutes = registerGenaiEvalRoutes;
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -10,13 +11,15 @@ const APPROACHES = {
         id: "strict-qwen",
         model: "qwen/qwen3-32b",
         temperature: 0.15,
-        system: "You answer factual questions briefly. Use 2–4 short sentences. No markdown unless asked.",
+        system: "You answer factual questions briefly. Use 2–4 short sentences. No markdown unless asked. " +
+            "Reply with only the final answer for the user—no chain-of-thought, no XML tags, no internal reasoning.",
     },
     "creative-qwen": {
         id: "creative-qwen",
         model: "qwen/qwen3-32b",
         temperature: 0.9,
-        system: "You give imaginative, varied answers. One short paragraph, conversational tone.",
+        system: "You give imaginative, varied answers. One short paragraph, conversational tone. " +
+            "Output only the answer text—no thinking tags or hidden reasoning blocks.",
     },
     "fast-llama": {
         id: "fast-llama",
@@ -27,6 +30,28 @@ const APPROACHES = {
 };
 const INITIAL_ELO = 1500;
 const DEFAULT_K = 32;
+function stripReasoningArtifacts(text) {
+    const redacted = "redacted";
+    const thinking = "thinking";
+    const think = "think";
+    const patterns = [
+        new RegExp("<" + think + ">[\\s\\S]*?<\\/" + redacted + "_" + thinking + ">", "gi"),
+        new RegExp("<" + think + ">[\\s\\S]*?<\\/" + think + ">", "gi"),
+        new RegExp("<" + redacted + "_" + thinking + ">[\\s\\S]*?<\\/" + redacted + "_" + thinking + ">", "gi"),
+        new RegExp("<" + redacted + "_" + think + ">[\\s\\S]*?<\\/" + redacted + "_" + thinking + ">", "gi"),
+        new RegExp("<thinking>[\\s\\S]*?<\\/thinking>", "gi"),
+    ];
+    let t = text;
+    for (let pass = 0; pass < 4; pass++) {
+        const before = t;
+        for (const p of patterns) {
+            t = t.replace(p, "");
+        }
+        if (t === before)
+            break;
+    }
+    return t.trim();
+}
 function expectedScore(ratingA, ratingB) {
     return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
 }
@@ -83,7 +108,8 @@ async function groqComplete(apiKey, model, messages, temperature, maxTokens) {
         throw new Error(`Groq ${res.status}: ${await res.text()}`);
     }
     const data = (await res.json());
-    return data.choices?.[0]?.message?.content?.trim() || "(empty)";
+    const raw = data.choices?.[0]?.message?.content?.trim() || "(empty)";
+    return stripReasoningArtifacts(raw) || "(empty)";
 }
 async function runApproach(apiKey, approach, userPrompt) {
     const cfg = APPROACHES[approach.id];
@@ -97,7 +123,6 @@ function pickDefaultApproach() {
     defaultRoundRobin++;
     return id;
 }
-/** Rotate pairs so dual mode exercises different approach combinations. */
 const dualPairs = [
     ["strict-qwen", "creative-qwen"],
     ["creative-qwen", "fast-llama"],
@@ -126,11 +151,6 @@ function registerGenaiEvalRoutes(app) {
             rankings: elo.rankings(),
         });
     });
-    /**
-     * POST /api/genai
-     * Body: { "prompt": string, "approach"?: ApproachId }
-     * Query: dual=1 (or true) → two responses from two different approaches; optional "preference": { "winner", "loser" } in body when dual was used (same roundtrip) — spec asks preference support; cleaner as second call to POST /api/genai/preference
-     */
     app.post("/api/genai", async (req, res) => {
         const pref = req.body?.preference;
         if (pref && typeof pref === "object") {
@@ -213,7 +233,6 @@ function registerGenaiEvalRoutes(app) {
             res.status(502).json({ error: msg });
         }
     });
-    /** Record user preference: winner’s approach beat loser’s (ELO update). */
     app.post("/api/genai/preference", (req, res) => {
         const w = req.body?.winner;
         const l = req.body?.loser;

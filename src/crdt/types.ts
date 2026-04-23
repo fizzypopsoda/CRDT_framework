@@ -6,6 +6,7 @@ export interface PixelUpdate {
     ts: number;     // timestamp
     userId: string;
     opId: string;   // unique operation ID
+    college?: string;
 }
 
 export type PixelKey = string;

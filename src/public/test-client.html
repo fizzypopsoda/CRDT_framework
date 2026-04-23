@@ -100,12 +100,88 @@
             border-style: inset;
             transform: translateY(1px);
         }
+
+        .mini-btn {
+            font-family: "Press Start 2P", system-ui, sans-serif;
+            font-size: 7px;
+            padding: 5px 8px;
+            color: var(--ink);
+            background: var(--bg-light);
+            border: 2px outset var(--bg-light);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .mini-btn:active { border-style: inset; }
+
+        #minimap {
+            position: absolute;
+            right: 8px;
+            bottom: 8px;
+            width: 120px;
+            height: 120px;
+            image-rendering: pixelated;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            background: rgba(0,0,0,0.15);
+            pointer-events: none;
+            z-index: 2;
+            box-shadow: 0 2px 8px rgba(0,0,0,.2);
+        }
+
+        .leaderboard-strip {
+            margin-top: 10px;
+            padding: 10px 12px;
+            font-size: 8px;
+            line-height: 1.5;
+            background: var(--panel);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            color: var(--ink);
+            word-break: break-word;
+        }
+        .leaderboard-strip h2 {
+            margin: 0 0 8px 0;
+            font-size: 9px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            opacity: 0.85;
+        }
+        .lb-empty { margin: 0; opacity: 0.75; }
+        .lb-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 4px;
+        }
+        .lb-list li {
+            display: grid;
+            grid-template-columns: 22px 1fr auto;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 6px;
+            background: rgba(255,255,255,0.45);
+            border-radius: 4px;
+            border: 1px solid rgba(200,149,217,0.5);
+        }
+        .lb-place { opacity: 0.65; text-align: right; }
+        .lb-college { font-weight: bold; }
+        .lb-count { opacity: 0.9; font-variant-numeric: tabular-nums; }
+        .lb-total { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border); opacity: 0.8; }
+
+        #profile {
+            font-size: 8px;
+            max-width: 220px;
+            line-height: 1.4;
+            opacity: 0.95;
+        }
     </style>
 </head>
 <body>
 <div class="app">
     <div class="toolbar">
         <a href="/logout" style="position:fixed;top:12px;right:12px;">Log out</a>
+        <a href="/login" style="position:fixed;top:12px;right:88px;font-size:8px;">CAS login</a>
         <label>Color</label>
         <label for="colorPicker"></label><input type="color" id="colorPicker" />
         <div class="swatch" id="colorSwatch"></div>
@@ -116,12 +192,24 @@
         <div style="width:1px;height:20px;background:#e6e6ee;margin:0 8px;"></div>
         <button id="modeToggle" class="mode-toggle mode-toggle-batched">MODE: BATCHED</button>
 
+        <div style="width:1px;height:20px;background:#e6e6ee;margin:0 8px;"></div>
+        <button type="button" id="bordersToggle" class="mini-btn" title="4×4 regions (25×25 px each); labels use college codes">College borders: OFF</button>
+        <button type="button" id="undoBtn" class="mini-btn" title="Ctrl/Cmd+Z">Undo</button>
+        <button type="button" id="redoBtn" class="mini-btn" title="Ctrl/Cmd+Shift+Z">Redo</button>
+
         <div class="spacer"></div>
+        <span id="profile"></span>
+    </div>
+
+    <div class="leaderboard-strip" title="Pixels counted by the painter's college (updates over WebSocket)">
+        <h2>Territory leaderboard</h2>
+        <div id="leaderboard"></div>
     </div>
 
     <div class="board-wrap">
         <canvas id="canvas"></canvas>
         <canvas id="overlay"></canvas>
+        <canvas id="minimap" width="120" height="120" aria-hidden="true"></canvas>
     </div>
 
 </div>

@@ -45,9 +45,9 @@ const path_1 = __importDefault(require("path"));
 const redis_1 = require("./redis");
 const analyticsClient_1 = require("./analyticsClient");
 const genaiEval_1 = require("./genaiEval");
+const college_1 = require("./college");
 const app = (0, express_1.default)();
 const useRedis = process.env.USE_REDIS !== "false" && !!process.env.REDIS_URL;
-/** Updated on every inbound WebSocket message (any type); exposed on GET /api/ping. */
 let lastWsMessageAt = null;
 (async () => {
     const { setupAuth } = await Promise.resolve().then(() => __importStar(require("./auth")));
@@ -58,6 +58,32 @@ let lastWsMessageAt = null;
     const server = (0, http_1.createServer)(app);
     const wss = new ws_1.WebSocketServer({ server });
     const canvas = new CanvasState_1.CanvasState();
+    function getLeaderboardSnapshot() {
+        const counts = new Map();
+        for (const p of canvas.getAll()) {
+            const c = p.college || "—";
+            counts.set(c, (counts.get(c) || 0) + 1);
+        }
+        const ranked = [...counts.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .map(([college, pixels]) => ({ college, pixels }));
+        return { ranked, totalPixels: canvas.getAll().length };
+    }
+    let leaderboardBroadcastTimer = null;
+    function scheduleLeaderboardBroadcast() {
+        if (leaderboardBroadcastTimer)
+            return;
+        leaderboardBroadcastTimer = setTimeout(() => {
+            leaderboardBroadcastTimer = null;
+            const snap = getLeaderboardSnapshot();
+            const payload = JSON.stringify({ type: "LEADERBOARD", ...snap });
+            for (const client of wss.clients) {
+                if (client.readyState === ws_1.WebSocket.OPEN) {
+                    client.send(payload);
+                }
+            }
+        }, 280);
+    }
     async function loadCanvas() {
         if (!useRedis || !redis_1.redis)
             return;
@@ -103,6 +129,12 @@ let lastWsMessageAt = null;
     app.get("/api/ping", (_req, res) => {
         res.json({ ok: true, ts: Date.now(), lastWsMessageAt });
     });
+    app.get("/api/colleges", (_req, res) => {
+        res.json({ codes: [...college_1.RESIDENTIAL_COLLEGE_CODES] });
+    });
+    app.get("/api/leaderboard", (_req, res) => {
+        res.json(getLeaderboardSnapshot());
+    });
     wss.on("connection", (ws) => {
         console.log("Client connected");
         ws.on("message", async (msg) => {
@@ -111,10 +143,33 @@ let lastWsMessageAt = null;
                 lastWsMessageAt = Date.now();
                 switch (data.type) {
                     case "AUTH": {
-                        const payload = jsonwebtoken_1.default.decode(data.idToken);
-                        ws.userId = data.analyticsId ||
-                            payload?.sub ||
-                            `anon-${Math.random().toString(36).slice(2, 8)}`;
+                        const secret = process.env.SESSION_SECRET || "temporary-secret";
+                        let netId;
+                        let college;
+                        if (typeof data.token === "string" && data.token.length > 0) {
+                            try {
+                                const pl = jsonwebtoken_1.default.verify(data.token, secret);
+                                netId = pl.netId || pl.sub || `anon-${Math.random().toString(36).slice(2, 8)}`;
+                                college = pl.college || "Guest";
+                                ws.displayName = pl.displayName;
+                            }
+                            catch {
+                                ws.send(JSON.stringify({ type: "AUTH_ERR", error: "invalid_ws_token" }));
+                                return;
+                            }
+                        }
+                        else {
+                            const payload = jsonwebtoken_1.default.decode(data.idToken);
+                            netId =
+                                data.analyticsId ||
+                                    payload?.sub ||
+                                    `anon-${Math.random().toString(36).slice(2, 8)}`;
+                            college = "Guest";
+                            ws.displayName = undefined;
+                        }
+                        ws.userId = netId;
+                        ws.netId = netId;
+                        ws.college = college;
                         const variant = await (0, analyticsClient_1.getAssignedVariant)(ws.userId, "pixel_size_test");
                         if (variant) {
                             (0, analyticsClient_1.logExposure)(ws.userId, "pixel_size_test", variant);
@@ -122,15 +177,28 @@ let lastWsMessageAt = null;
                         ws.send(JSON.stringify({
                             type: "AUTH_ACK",
                             userId: ws.userId,
-                            variant: variant
+                            netId: ws.netId,
+                            college: ws.college,
+                            displayName: ws.displayName,
+                            variant: variant,
                         }));
                         ws.send(JSON.stringify({ type: "SNAPSHOT", pixels: canvas.getAll() }));
+                        ws.send(JSON.stringify({ type: "LEADERBOARD", ...getLeaderboardSnapshot() }));
                         break;
                     }
                     case "PixelUpdate": {
                         if (!ws.userId)
                             return;
-                        const update = { ...data, userId: ws.userId };
+                        const update = {
+                            canvasId: data.canvasId,
+                            x: data.x,
+                            y: data.y,
+                            color: data.color,
+                            ts: data.ts,
+                            opId: data.opId,
+                            userId: ws.userId,
+                            college: ws.college,
+                        };
                         const applied = canvas.apply(update);
                         ws.send(JSON.stringify({ type: "Ack", opId: data.opId }));
                         if (applied) {
@@ -144,6 +212,7 @@ let lastWsMessageAt = null;
                                     client.send(JSON.stringify({ type: "PixelUpdate", ...update }));
                                 }
                             }
+                            scheduleLeaderboardBroadcast();
                         }
                         break;
                     }
@@ -152,7 +221,16 @@ let lastWsMessageAt = null;
                             return;
                         const variant = await (0, analyticsClient_1.getAssignedVariant)(ws.userId, "pixel_size_test");
                         for (const update of data.updates) {
-                            const fullUpdate = { ...update, userId: ws.userId };
+                            const fullUpdate = {
+                                canvasId: update.canvasId,
+                                x: update.x,
+                                y: update.y,
+                                color: update.color,
+                                ts: update.ts,
+                                opId: update.opId,
+                                userId: ws.userId,
+                                college: ws.college,
+                            };
                             const applied = canvas.apply(fullUpdate);
                             if (applied) {
                                 await savePixel(fullUpdate);
@@ -165,13 +243,23 @@ let lastWsMessageAt = null;
                                 client.send(JSON.stringify({ type: "BatchUpdate", updates: data.updates }));
                             }
                         }
+                        scheduleLeaderboardBroadcast();
                         break;
                     }
                     case "PixelBatch": {
                         if (!ws.userId || !Array.isArray(data.updates))
                             return;
                         for (const raw of data.updates) {
-                            const update = { ...raw, userId: ws.userId };
+                            const update = {
+                                canvasId: raw.canvasId,
+                                x: raw.x,
+                                y: raw.y,
+                                color: raw.color,
+                                ts: raw.ts,
+                                opId: raw.opId,
+                                userId: ws.userId,
+                                college: ws.college,
+                            };
                             const applied = canvas.apply(update);
                             // Optional: Ack per operation
                             if (raw.opId) {
@@ -186,6 +274,7 @@ let lastWsMessageAt = null;
                                 }
                             }
                         }
+                        scheduleLeaderboardBroadcast();
                         break;
                     }
                     case "CURSOR": {
@@ -194,6 +283,9 @@ let lastWsMessageAt = null;
                         const cursorMsg = {
                             type: "CURSOR",
                             userId: ws.userId,
+                            netId: ws.netId,
+                            college: ws.college,
+                            displayName: ws.displayName,
                             x: data.x,
                             y: data.y,
                             color: data.color,
@@ -214,6 +306,7 @@ let lastWsMessageAt = null;
                                 client.send(JSON.stringify({ type: "CLEAR" }));
                             }
                         }
+                        scheduleLeaderboardBroadcast();
                         break;
                     }
                     default:

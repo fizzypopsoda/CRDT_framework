@@ -1,26 +1,37 @@
 import express from "express";
 import session from "express-session";
 import fetch from "node-fetch";
+import jwt from "jsonwebtoken";
+import { collegeFromNetId } from "./college";
+import { pickRandomDemoPersona } from "./demoPersonas";
 
 declare module "express-session" {
     interface SessionData {
         cas_user?: string;
+        college?: string;
+        displayName?: string;
+        demoPersonaAssigned?: boolean;
     }
 }
+
+function sessionSecret(): string {
+    return process.env.SESSION_SECRET || "temporary-secret";
+}
+
+function isAssetPath(p: string): boolean {
+    return /\.(js|mjs|html|css|ico|png|svg|map|woff2?)$/i.test(p);
+}
+
 export function setupAuth(app: express.Application) {
     const CAS_BASE = "https://secure.its.yale.edu/cas";
     const SERVICE_URL =
         process.env.SERVICE_URL ||
         "https://crdt-framework.onrender.com/login";
-    // Default to auth DISABLED locally unless AUTH_MODE is explicitly set.
-    // This means:
-    //   - Local dev (no AUTH_MODE) -> "disabled"
-    //   - Render / prod (AUTH_MODE=cas) -> CAS enabled
     const AUTH_MODE = process.env.AUTH_MODE ?? "disabled";
 
     app.use(
         session({
-            secret: process.env.SESSION_SECRET || "temporary-secret",
+            secret: sessionSecret(),
             resave: false,
             saveUninitialized: true,
             cookie: {
@@ -31,17 +42,56 @@ export function setupAuth(app: express.Application) {
     );
 
     if (AUTH_MODE === "disabled") {
-        console.warn("⚠️  CAS auth disabled (for testing only)");
+        console.warn("⚠️  CAS auth disabled — assigning random demo Yale-style personas per session");
 
-        app.use((req, _res, next) => {
-            if (!req.session.cas_user) {
-                (req.session as any).cas_user = "guest";
+        app.use((_req, _res, next) => {
+            if (!_req.session.demoPersonaAssigned) {
+                const p = pickRandomDemoPersona();
+                _req.session.cas_user = p.netId;
+                _req.session.college = p.college;
+                _req.session.displayName = p.displayName;
+                _req.session.demoPersonaAssigned = true;
             }
             next();
         });
+    }
 
-        app.get("/login", (_req, res) => res.send("Auth disabled for testing"));
-        app.get("/logout", (_req, res) => res.send("Auth disabled for testing"));
+    app.get("/api/me", (req, res) => {
+        const netId = req.session.cas_user;
+        if (!netId) {
+            return res.status(401).json({ error: "Not logged in" });
+        }
+        res.json({
+            netId,
+            college: req.session.college ?? collegeFromNetId(netId),
+            displayName: req.session.displayName,
+            authMode: AUTH_MODE,
+            demoPersona: AUTH_MODE === "disabled",
+        });
+    });
+
+    app.get("/api/ws-token", (req, res) => {
+        const netId = req.session.cas_user;
+        if (!netId) {
+            return res.status(401).json({ error: "Not logged in" });
+        }
+        const college = req.session.college ?? collegeFromNetId(netId);
+        const displayName = req.session.displayName;
+        const token = jwt.sign(
+            { sub: netId, netId, college, displayName, v: 1 },
+            sessionSecret(),
+            { expiresIn: "8h" }
+        );
+        res.json({ token, netId, college, displayName });
+    });
+
+    if (AUTH_MODE === "disabled") {
+        app.get("/login", (_req, res) =>
+            res.send("Auth disabled — you already have a demo persona. Open / ; use Log out to roll a new one.")
+        );
+        app.get("/logout", (req, res) => {
+            req.session.destroy(() => res.redirect("/"));
+        });
         return;
     }
 
@@ -70,7 +120,10 @@ export function setupAuth(app: express.Application) {
 
             const netid = match[1];
             req.session.cas_user = netid;
-            console.log("Logged in via Yale CAS:", netid);
+            req.session.college = collegeFromNetId(netid) as string;
+            req.session.displayName = undefined;
+            req.session.demoPersonaAssigned = false;
+            console.log("Logged in via Yale CAS:", netid, req.session.college);
             return res.redirect("/");
         } catch (err) {
             console.error("CAS error:", err);
@@ -86,9 +139,18 @@ export function setupAuth(app: express.Application) {
     });
 
     app.use((req, res, next) => {
-        if (!req.session.cas_user && !req.path.startsWith("/login")) {
-            return res.redirect("/login");
+        if (req.session.cas_user) {
+            return next();
         }
-        next();
+        if (req.path.startsWith("/login") || req.path.startsWith("/logout")) {
+            return next();
+        }
+        if (req.path.startsWith("/api/")) {
+            return next();
+        }
+        if (isAssetPath(req.path)) {
+            return next();
+        }
+        return res.redirect("/login");
     });
 }
